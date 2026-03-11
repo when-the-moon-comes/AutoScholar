@@ -1,0 +1,19 @@
+*.txt
+
+# Python cache
+__pycache__/
+*.pyc
+
+# TeX build artifacts
+*.log
+*.aux
+*.bbl
+*.blg
+*.out
+*.bcf
+*.run.xml
+*.synctex.gz
+*.toc
+
+# Current paper workspace
+paper/

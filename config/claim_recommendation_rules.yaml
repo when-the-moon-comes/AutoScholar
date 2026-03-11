@@ -1,0 +1,35 @@
+stopwords: []
+
+excluded_queries:
+  "C02:query_2": off-topic retrieval
+  "C06:query_2": mixed cross-boundary retrieval; functional-region query is stronger
+  "C08:query_2": off-topic small result set
+  "C10:query_1": broad resilience retrieval; boundary/regulation queries are more relevant
+  "C13:query_1": overly broad retrieval with weak topical precision
+  "C14:query_2": broad GBA governance retrieval; comparative-bay query is more relevant
+  "C14:query_3": broad GBA governance retrieval; comparative-bay query is more relevant
+  "C16:query_2": off-topic multi-scale segmentation retrieval
+  "C17:query_2": off-topic retrieval
+  "C18:query_1": overly broad retrieval with weak topical precision
+  "C19:query_2": indirect governance retrieval; mega-city-region governance query is stronger
+  "C20:query_2": off-topic retrieval
+  "C23:query_3": adaptive intervention retrieval is off-domain for this planning claim
+
+excluded_papers:
+  "doi:10.1016/j.scitotenv.2008.11.008": vehicle-emissions paper is off-topic for CAS claim
+  "doi:10.1137/18m1193189": banking-network bubbles paper is off-topic for urban amplification claim
+  "title:group decision making under multiple criteria: methods and applications|year:1986": decision-making handbook is off-topic for urban amplification claim
+  "doi:10.5194/essd-14-3835-2022": LCZ global map is off-topic for CAS/spatial-emergence framing
+  "doi:10.1177/15356841241231492": San Francisco housing strategies paper is too indirect for bay-region governance comparison
+  "doi:10.1029/2022gh000772": summer-temperature mobility paper is too indirect for bay-region governance comparison
+
+claim_notes:
+  C03: One supporting query needs rewriting; current recommendations rely on the stronger multi-scale query.
+  C04: Candidate pool is conceptually useful but still broad; verify title/abstract fit before inserting citations.
+  C08: Current recommendations rely on one usable query because the second query produced off-topic results.
+  C15: One H3-related query returned no results; current recommendations rely on the two stronger grid-system queries.
+  C17: This claim remains methodologically useful but the query pool is mixed; validate fit manually before citing.
+  C18: Institutional-heterogeneity retrieval is mixed; recommendations prioritize cross-border metropolitan governance papers.
+  C19: Differentiated-governance support is partly indirect; validate policy framing against your target sentence.
+  C20: Current recommendations are provisional; retrieval for decongestion/redundancy remains weaker than other claims.
+  C21: Current recommendations are usable but corridor-specific structural-convergence support is still moderate in strength.
