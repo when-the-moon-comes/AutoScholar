@@ -36,13 +36,23 @@ class TriggerSettings:
 
 
 @dataclass(frozen=True)
+class ClaimSeedControl:
+    positive: List[str]
+    negative: List[str]
+    blocked: List[str]
+
+
+@dataclass(frozen=True)
 class SeedSettings:
+    selection_mode: str
     max_seeds_per_claim: int
     min_total_overlap: int
+    claim_overrides: Dict[str, ClaimSeedControl]
 
 
 @dataclass(frozen=True)
 class RecommendationSettings:
+    method: str
     per_seed_limit: int
     top_candidates_per_claim: int
     ready_candidate_count: int
@@ -143,6 +153,92 @@ def default_rules_path() -> Path:
     return REPO_ROOT / "config" / "claim_recommendation_rules.yaml"
 
 
+def parse_seed_reference(value: object, field_name: str) -> str:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if not normalized:
+            raise ValueError(f"Config field '{field_name}' contains an empty seed reference.")
+        if normalized.startswith(("paperid:", "doi:", "title:")):
+            return normalized
+        raise ValueError(
+            f"Config field '{field_name}' must use 'paperId:', 'doi:', or 'title:...|year:...'."
+        )
+
+    if isinstance(value, dict):
+        if "paper_key" in value:
+            return parse_seed_reference(value["paper_key"], field_name)
+
+        paper_id = value.get("paperId", value.get("paper_id"))
+        if paper_id not in (None, ""):
+            return f"paperid:{str(paper_id).strip().lower()}"
+
+        doi = value.get("doi")
+        if doi not in (None, ""):
+            return f"doi:{str(doi).strip().lower()}"
+
+        title = value.get("title")
+        if title not in (None, ""):
+            normalized_title = str(title).strip().lower()
+            year = value.get("year", "")
+            return f"title:{normalized_title}|year:{year}"
+
+    raise ValueError(
+        f"Config field '{field_name}' must be a string seed reference or a mapping with "
+        "'paperId', 'doi', 'paper_key', or 'title'+'year'."
+    )
+
+
+def parse_seed_reference_list(value: object, field_name: str) -> List[str]:
+    if value in (None, "", []):
+        return []
+    if not isinstance(value, list):
+        raise ValueError(f"Config field '{field_name}' must be a list.")
+
+    refs: List[str] = []
+    seen = set()
+    for item in value:
+        ref = parse_seed_reference(item, field_name)
+        if ref in seen:
+            continue
+        seen.add(ref)
+        refs.append(ref)
+    return refs
+
+
+def parse_claim_seed_controls(raw: object) -> Dict[str, ClaimSeedControl]:
+    if raw in (None, {}):
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("Config field 'seed.claim_overrides' must be a YAML mapping.")
+
+    overrides: Dict[str, ClaimSeedControl] = {}
+    for claim_id, value in raw.items():
+        normalized_claim_id = str(claim_id).strip()
+        if not normalized_claim_id:
+            continue
+        if value is None:
+            value = {}
+        if not isinstance(value, dict):
+            raise ValueError(
+                f"Config field 'seed.claim_overrides.{normalized_claim_id}' must be a mapping."
+            )
+        overrides[normalized_claim_id] = ClaimSeedControl(
+            positive=parse_seed_reference_list(
+                value.get("positive"),
+                f"seed.claim_overrides.{normalized_claim_id}.positive",
+            ),
+            negative=parse_seed_reference_list(
+                value.get("negative"),
+                f"seed.claim_overrides.{normalized_claim_id}.negative",
+            ),
+            blocked=parse_seed_reference_list(
+                value.get("blocked"),
+                f"seed.claim_overrides.{normalized_claim_id}.blocked",
+            ),
+        )
+    return overrides
+
+
 def parse_trigger_settings(raw: object) -> TriggerSettings:
     if raw is None:
         raw = {}
@@ -171,9 +267,17 @@ def parse_seed_settings(raw: object) -> SeedSettings:
     if not isinstance(raw, dict):
         raise ValueError("Config field 'seed' must be a YAML mapping.")
 
+    selection_mode = str(raw.get("selection_mode", "auto")).strip().lower()
+    if selection_mode not in {"auto", "hybrid", "manual"}:
+        raise ValueError(
+            "Config field 'seed.selection_mode' must be 'auto', 'hybrid', or 'manual'."
+        )
+
     return SeedSettings(
+        selection_mode=selection_mode,
         max_seeds_per_claim=int(raw.get("max_seeds_per_claim", 2)),
         min_total_overlap=int(raw.get("min_total_overlap", 2)),
+        claim_overrides=parse_claim_seed_controls(raw.get("claim_overrides")),
     )
 
 
@@ -183,7 +287,14 @@ def parse_recommendation_settings(raw: object) -> RecommendationSettings:
     if not isinstance(raw, dict):
         raise ValueError("Config field 'recommendations' must be a YAML mapping.")
 
+    method = str(raw.get("method", "positive_seed_list")).strip().lower()
+    if method not in {"single_seed", "positive_seed_list"}:
+        raise ValueError(
+            "Config field 'recommendations.method' must be 'single_seed' or 'positive_seed_list'."
+        )
+
     return RecommendationSettings(
+        method=method,
         per_seed_limit=int(raw.get("per_seed_limit", 5)),
         top_candidates_per_claim=int(raw.get("top_candidates_per_claim", 5)),
         ready_candidate_count=int(raw.get("ready_candidate_count", 2)),
@@ -397,21 +508,222 @@ def rank_candidates(groups: Dict[str, dict]) -> List[Tuple[str, dict]]:
     return ranked
 
 
-def select_seed_candidates(
+def candidate_reference_aliases(paper: dict, recommendation_module: Any) -> List[str]:
+    aliases = [parse_seed_reference(recommendation_module.paper_key(paper), "candidate.paper_key")]
+
+    paper_id = paper.get("paperId")
+    if paper_id:
+        aliases.append(f"paperid:{str(paper_id).strip().lower()}")
+
+    doi = paper.get("doi")
+    if doi:
+        aliases.append(f"doi:{str(doi).strip().lower()}")
+
+    title = (paper.get("title") or "").strip().lower()
+    year = paper.get("year") or ""
+    if title:
+        aliases.append(f"title:{title}|year:{year}")
+
+    deduped: List[str] = []
+    seen = set()
+    for alias in aliases:
+        if alias in seen:
+            continue
+        seen.add(alias)
+        deduped.append(alias)
+    return deduped
+
+
+def build_seed_candidate_lookup(
+    ranked_query_candidates: List[Tuple[str, dict]],
+    recommendation_module: Any,
+) -> Dict[str, Tuple[str, dict]]:
+    lookup: Dict[str, Tuple[str, dict]] = {}
+    for paper_key, entry in ranked_query_candidates:
+        for alias in candidate_reference_aliases(entry["paper"], recommendation_module):
+            lookup.setdefault(alias, (paper_key, entry))
+    return lookup
+
+
+def match_seed_control_refs(
+    refs: List[str],
+    lookup: Dict[str, Tuple[str, dict]],
+    *,
+    require_paper_id: bool,
+) -> Tuple[List[Tuple[str, str, dict]], List[str], List[str]]:
+    matched_refs: List[Tuple[str, str, dict]] = []
+    unresolved_refs: List[str] = []
+    unseedable_refs: List[str] = []
+
+    for ref in refs:
+        match = lookup.get(ref)
+        if match is None:
+            unresolved_refs.append(ref)
+            continue
+
+        paper_key, entry = match
+        if require_paper_id and not entry["paper"].get("paperId"):
+            unseedable_refs.append(ref)
+            continue
+
+        matched_refs.append((ref, paper_key, entry))
+
+    return matched_refs, unresolved_refs, unseedable_refs
+
+
+def select_auto_seed_candidates(
     ranked_query_candidates: List[Tuple[str, dict]],
     config: CorrectionConfig,
+    excluded_paper_keys: set[str],
+    remaining_slots: int,
 ) -> List[Tuple[str, dict]]:
     seeds: List[Tuple[str, dict]] = []
+    if remaining_slots <= 0:
+        return seeds
+
     for paper_key, entry in ranked_query_candidates:
+        if paper_key in excluded_paper_keys:
+            continue
         total_overlap = entry["claim_overlap"] + entry["query_overlap"]
         if total_overlap < config.seed.min_total_overlap:
             continue
         if not entry["paper"].get("paperId"):
             continue
         seeds.append((paper_key, entry))
-        if len(seeds) >= config.seed.max_seeds_per_claim:
+        if len(seeds) >= remaining_slots:
             break
     return seeds
+
+
+def select_seed_candidates(
+    claim_id: str,
+    ranked_query_candidates: List[Tuple[str, dict]],
+    config: CorrectionConfig,
+    recommendation_module: Any,
+) -> Tuple[List[Tuple[str, dict]], List[Tuple[str, dict]], dict]:
+    control = config.seed.claim_overrides.get(
+        claim_id,
+        ClaimSeedControl(positive=[], negative=[], blocked=[]),
+    )
+    candidate_lookup = build_seed_candidate_lookup(ranked_query_candidates, recommendation_module)
+
+    blocked_matches, unresolved_blocked_refs, _ = match_seed_control_refs(
+        control.blocked,
+        candidate_lookup,
+        require_paper_id=False,
+    )
+    matched_blocked_refs = [ref for ref, _, _ in blocked_matches]
+    blocked_keys = {paper_key for _, paper_key, _ in blocked_matches}
+
+    manual_positive_matches, unresolved_positive_refs, unseedable_positive_refs = (
+        match_seed_control_refs(
+            control.positive,
+            candidate_lookup,
+            require_paper_id=True,
+        )
+    )
+    manual_negative_matches, unresolved_negative_refs, unseedable_negative_refs = (
+        match_seed_control_refs(
+            control.negative,
+            candidate_lookup,
+            require_paper_id=True,
+        )
+    )
+
+    warnings: List[str] = []
+
+    if control.positive and config.seed.selection_mode == "auto":
+        warnings.append("manual positive seed refs were configured but ignored because selection_mode=auto")
+
+    if unseedable_positive_refs:
+        warnings.append(
+            "some configured positive seed refs matched candidate papers without paperId and were ignored"
+        )
+    if unseedable_negative_refs:
+        warnings.append(
+            "some configured negative seed refs matched candidate papers without paperId and were ignored"
+        )
+
+    filtered_manual_positive: List[Tuple[str, dict]] = []
+    filtered_positive_refs: List[str] = []
+    positive_keys = set()
+    for ref, paper_key, entry in manual_positive_matches:
+        if paper_key in blocked_keys:
+            warnings.append("blocked seed refs take precedence over positive seed refs")
+            continue
+        if paper_key in positive_keys:
+            continue
+        positive_keys.add(paper_key)
+        filtered_positive_refs.append(ref)
+        filtered_manual_positive.append((paper_key, entry))
+
+    filtered_manual_negative: List[Tuple[str, dict]] = []
+    filtered_negative_refs: List[str] = []
+    negative_keys = set()
+    for ref, paper_key, entry in manual_negative_matches:
+        if paper_key in blocked_keys:
+            warnings.append("blocked seed refs take precedence over negative seed refs")
+            continue
+        if paper_key in positive_keys:
+            warnings.append("positive seed refs take precedence over negative seed refs")
+            continue
+        if paper_key in negative_keys:
+            continue
+        negative_keys.add(paper_key)
+        filtered_negative_refs.append(ref)
+        filtered_manual_negative.append((paper_key, entry))
+
+    selected_positive: List[Tuple[str, dict]] = []
+    if config.seed.selection_mode == "manual":
+        if len(filtered_manual_positive) > config.seed.max_seeds_per_claim:
+            warnings.append("manual positive seeds were truncated to max_seeds_per_claim")
+        selected_positive = filtered_manual_positive[: config.seed.max_seeds_per_claim]
+    elif config.seed.selection_mode == "hybrid":
+        if len(filtered_manual_positive) > config.seed.max_seeds_per_claim:
+            warnings.append("manual positive seeds were truncated to max_seeds_per_claim before hybrid auto-fill")
+        selected_positive.extend(filtered_manual_positive[: config.seed.max_seeds_per_claim])
+        auto_excluded_keys = blocked_keys | negative_keys | {paper_key for paper_key, _ in selected_positive}
+        auto_candidates = select_auto_seed_candidates(
+            ranked_query_candidates=ranked_query_candidates,
+            config=config,
+            excluded_paper_keys=auto_excluded_keys,
+            remaining_slots=max(config.seed.max_seeds_per_claim - len(selected_positive), 0),
+        )
+        selected_positive.extend(auto_candidates)
+    else:
+        auto_excluded_keys = blocked_keys | negative_keys
+        selected_positive = select_auto_seed_candidates(
+            ranked_query_candidates=ranked_query_candidates,
+            config=config,
+            excluded_paper_keys=auto_excluded_keys,
+            remaining_slots=config.seed.max_seeds_per_claim,
+        )
+
+    selected_positive_keys = {paper_key for paper_key, _ in selected_positive}
+    effective_negative = [
+        (paper_key, entry)
+        for paper_key, entry in filtered_manual_negative
+        if paper_key not in selected_positive_keys
+    ]
+    if len(effective_negative) < len(filtered_manual_negative):
+        warnings.append("selected positive seeds are never also used as negative seeds")
+
+    control_report = {
+        "selection_mode": config.seed.selection_mode,
+        "configured_positive_refs": list(control.positive),
+        "configured_negative_refs": list(control.negative),
+        "configured_blocked_refs": list(control.blocked),
+        "matched_positive_refs": filtered_positive_refs,
+        "matched_negative_refs": filtered_negative_refs,
+        "matched_blocked_refs": matched_blocked_refs,
+        "unresolved_positive_refs": unresolved_positive_refs,
+        "unresolved_negative_refs": unresolved_negative_refs,
+        "unresolved_blocked_refs": unresolved_blocked_refs,
+        "unseedable_positive_refs": unseedable_positive_refs,
+        "unseedable_negative_refs": unseedable_negative_refs,
+        "warnings": sorted(set(warnings)),
+    }
+    return selected_positive, effective_negative, control_report
 
 
 def compute_trigger_reasons(
@@ -475,6 +787,7 @@ def fetch_recommendation_groups(
     claim: Any,
     claim_records: List[dict],
     seed_candidates: List[Tuple[str, dict]],
+    negative_seed_candidates: List[Tuple[str, dict]],
     config: CorrectionConfig,
     rules: Any,
     recommendation_module: Any,
@@ -491,53 +804,117 @@ def fetch_recommendation_groups(
     client = SemanticScholarClient()
 
     try:
-        for index, (seed_key, seed_entry) in enumerate(seed_candidates, start=1):
-            seed_paper = seed_entry["paper"]
+        if config.recommendations.method == "positive_seed_list":
+            positive_seed_ids = [
+                seed_entry["paper"]["paperId"]
+                for _, seed_entry in seed_candidates
+                if seed_entry["paper"].get("paperId")
+            ]
+            negative_seed_ids = [
+                seed_entry["paper"]["paperId"]
+                for _, seed_entry in negative_seed_candidates
+                if seed_entry["paper"].get("paperId")
+            ]
+            positive_seed_titles = [
+                seed_entry["paper"].get("title") or seed_entry["paper"]["paperId"]
+                for _, seed_entry in seed_candidates
+                if seed_entry["paper"].get("paperId")
+            ]
+            request_limit = max(1, config.recommendations.per_seed_limit * max(len(seed_candidates), 1))
+            source_id = "positive_seed_list:" + "+".join(sorted(positive_seed_ids))
+            source_title = "positive_seed_list[" + "; ".join(positive_seed_titles) + "]"
+
             try:
-                recommended_papers = client.get_recommendations(
-                    seed_paper["paperId"],
-                    limit=config.recommendations.per_seed_limit,
+                recommended_papers = client.get_recommendations_from_lists(
+                    positive_paper_ids=positive_seed_ids,
+                    negative_paper_ids=negative_seed_ids or None,
+                    limit=request_limit,
                     fields=config.recommendations.fields,
                 )
             except Exception as exc:
                 failures.append(
                     {
-                        "seed_paper_id": seed_paper.get("paperId"),
-                        "seed_title": seed_paper.get("title"),
+                        "seed_paper_id": source_id,
+                        "seed_title": source_title,
                         "error_type": exc.__class__.__name__,
                         "error": str(exc),
                     }
                 )
-                continue
+            else:
+                seed_keys = {seed_key for seed_key, _ in seed_candidates}
+                for raw_paper in recommended_papers:
+                    paper = normalize_recommended_paper(raw_paper)
+                    exclusion_reason = recommendation_module.paper_exclusion_reason(paper, rules)
+                    if exclusion_reason:
+                        continue
 
-            for raw_paper in recommended_papers:
-                paper = normalize_recommended_paper(raw_paper)
-                exclusion_reason = recommendation_module.paper_exclusion_reason(paper, rules)
-                if exclusion_reason:
+                    paper_key = recommendation_module.paper_key(paper)
+                    if paper_key in seed_keys:
+                        continue
+
+                    entry = grouped.setdefault(
+                        paper_key,
+                        {
+                            "paper": paper,
+                            "supporting_records": [],
+                            "recommended_by_seed_ids": set(),
+                            "recommended_by_seed_titles": set(),
+                            "claim_overlap": 0,
+                            "query_overlap": 0,
+                        },
+                    )
+                    if paper_strength(paper) > paper_strength(entry["paper"]):
+                        entry["paper"] = paper
+                    entry["recommended_by_seed_ids"].add(source_id)
+                    entry["recommended_by_seed_titles"].add(source_title)
+        else:
+            for index, (seed_key, seed_entry) in enumerate(seed_candidates, start=1):
+                seed_paper = seed_entry["paper"]
+                try:
+                    recommended_papers = client.get_recommendations(
+                        seed_paper["paperId"],
+                        limit=config.recommendations.per_seed_limit,
+                        fields=config.recommendations.fields,
+                    )
+                except Exception as exc:
+                    failures.append(
+                        {
+                            "seed_paper_id": seed_paper.get("paperId"),
+                            "seed_title": seed_paper.get("title"),
+                            "error_type": exc.__class__.__name__,
+                            "error": str(exc),
+                        }
+                    )
                     continue
 
-                paper_key = recommendation_module.paper_key(paper)
-                if paper_key == seed_key:
-                    continue
+                for raw_paper in recommended_papers:
+                    paper = normalize_recommended_paper(raw_paper)
+                    exclusion_reason = recommendation_module.paper_exclusion_reason(paper, rules)
+                    if exclusion_reason:
+                        continue
 
-                entry = grouped.setdefault(
-                    paper_key,
-                    {
-                        "paper": paper,
-                        "supporting_records": [],
-                        "recommended_by_seed_ids": set(),
-                        "recommended_by_seed_titles": set(),
-                        "claim_overlap": 0,
-                        "query_overlap": 0,
-                    },
-                )
-                if paper_strength(paper) > paper_strength(entry["paper"]):
-                    entry["paper"] = paper
-                entry["recommended_by_seed_ids"].add(seed_paper["paperId"])
-                entry["recommended_by_seed_titles"].add(seed_paper.get("title") or seed_paper["paperId"])
+                    paper_key = recommendation_module.paper_key(paper)
+                    if paper_key == seed_key:
+                        continue
 
-            if index < len(seed_candidates) and config.recommendations.pause_seconds > 0:
-                time.sleep(config.recommendations.pause_seconds)
+                    entry = grouped.setdefault(
+                        paper_key,
+                        {
+                            "paper": paper,
+                            "supporting_records": [],
+                            "recommended_by_seed_ids": set(),
+                            "recommended_by_seed_titles": set(),
+                            "claim_overlap": 0,
+                            "query_overlap": 0,
+                        },
+                    )
+                    if paper_strength(paper) > paper_strength(entry["paper"]):
+                        entry["paper"] = paper
+                    entry["recommended_by_seed_ids"].add(seed_paper["paperId"])
+                    entry["recommended_by_seed_titles"].add(seed_paper.get("title") or seed_paper["paperId"])
+
+                if index < len(seed_candidates) and config.recommendations.pause_seconds > 0:
+                    time.sleep(config.recommendations.pause_seconds)
     finally:
         client.close()
 
@@ -702,6 +1079,8 @@ def write_report(path: Path, records: List[dict]) -> None:
             handle.write(f"## {record['claim_id']}\n")
             handle.write(f"- Status: {record['status']}\n")
             handle.write(f"- Current recommendation status: {record['current_status']}\n")
+            handle.write(f"- Recommendation method: {record['recommendation_method']}\n")
+            handle.write(f"- Seed selection mode: {record['seed_selection_mode']}\n")
             handle.write(f"- Claim: {record['claim_text']}\n")
             handle.write(f"- Trigger reasons: {', '.join(record['trigger_reasons'])}\n")
             if record.get("claim_note"):
@@ -714,6 +1093,23 @@ def write_report(path: Path, records: List[dict]) -> None:
             handle.write(
                 f"- Query review: {', '.join(query_summaries) if query_summaries else 'none'}\n"
             )
+
+            seed_control = record.get("seed_control") or {}
+            seed_warnings = seed_control.get("warnings") or []
+            if seed_warnings:
+                handle.write(f"- Seed control warnings: {'; '.join(seed_warnings)}\n")
+
+            unresolved_refs = []
+            for field_name in (
+                "unresolved_positive_refs",
+                "unresolved_negative_refs",
+                "unresolved_blocked_refs",
+                "unseedable_positive_refs",
+                "unseedable_negative_refs",
+            ):
+                unresolved_refs.extend(seed_control.get(field_name) or [])
+            if unresolved_refs:
+                handle.write(f"- Unresolved or unusable seed refs: {', '.join(unresolved_refs)}\n")
 
             if not record["seeds"]:
                 handle.write("- Seed papers: none; query rewrite is recommended.\n\n")
@@ -728,6 +1124,17 @@ def write_report(path: Path, records: List[dict]) -> None:
                     f"support={', '.join(seed['supporting_query_keys'])}; "
                     f"overlap={seed['claim_overlap'] + seed['query_overlap']})\n"
                 )
+
+            if record.get("negative_seeds"):
+                handle.write("- Negative seed papers:\n")
+                for seed in record["negative_seeds"]:
+                    handle.write(
+                        "  "
+                        f"{seed['rank']}. {seed['title']} "
+                        f"({seed['year'] or 'n/a'}; cites={seed['citationCount'] or 0}; "
+                        f"support={', '.join(seed['supporting_query_keys'])}; "
+                        f"overlap={seed['claim_overlap'] + seed['query_overlap']})\n"
+                    )
 
             if record["recommendation_failures"]:
                 handle.write("- Recommendation failures:\n")
@@ -843,7 +1250,18 @@ def main() -> int:
             recommendation_module=recommendation_module,
         )
         ranked_query_candidates = rank_candidates(query_groups)
-        seed_candidates = select_seed_candidates(ranked_query_candidates, config)
+        seed_candidates, negative_seed_candidates, seed_control = select_seed_candidates(
+            claim_id=claim_id,
+            ranked_query_candidates=ranked_query_candidates,
+            config=config,
+            recommendation_module=recommendation_module,
+        )
+
+        if negative_seed_candidates and config.recommendations.method != "positive_seed_list":
+            seed_control["warnings"].append(
+                "negative seeds require recommendations.method=positive_seed_list and were ignored"
+            )
+            negative_seed_candidates = []
 
         recommendation_groups: Dict[str, dict] = {}
         recommendation_failures: List[dict] = []
@@ -852,6 +1270,7 @@ def main() -> int:
                 claim=claim,
                 claim_records=claim_records,
                 seed_candidates=seed_candidates,
+                negative_seed_candidates=negative_seed_candidates,
                 config=config,
                 rules=rules,
                 recommendation_module=recommendation_module,
@@ -869,6 +1288,10 @@ def main() -> int:
         serialized_seeds = [
             serialize_seed(paper_key, entry, rank)
             for rank, (paper_key, entry) in enumerate(seed_candidates, start=1)
+        ]
+        serialized_negative_seeds = [
+            serialize_seed(paper_key, entry, rank)
+            for rank, (paper_key, entry) in enumerate(negative_seed_candidates, start=1)
         ]
         status = determine_correction_status(
             seed_candidates=seed_candidates,
@@ -889,9 +1312,14 @@ def main() -> int:
             "claim_note": recommendation_item.get("note"),
             "status": status,
             "trigger_reasons": trigger_reasons,
+            "seed_selection_mode": seed_control["selection_mode"],
+            "seed_control": seed_control,
+            "recommendation_method": config.recommendations.method,
             "query_reviews": query_reviews,
             "seed_count": len(serialized_seeds),
             "seeds": serialized_seeds,
+            "negative_seed_count": len(serialized_negative_seeds),
+            "negative_seeds": serialized_negative_seeds,
             "recommendation_failures": recommendation_failures,
             "recommendation_candidate_count": len(recommendation_groups),
             "merged_candidate_count": len(merged_groups),
@@ -909,7 +1337,8 @@ def main() -> int:
         for record in triggered_records:
             print(
                 f"{record['claim_id']}: status={record['status']} "
-                f"seeds={record['seed_count']} triggers={','.join(record['trigger_reasons'])}"
+                f"seeds={record['seed_count']} negatives={record['negative_seed_count']} "
+                f"triggers={','.join(record['trigger_reasons'])}"
             )
         return 0
 

@@ -208,7 +208,10 @@ def format_entry(citekey: str, paper: dict) -> str:
 def collect_selected_papers(recommendation_module) -> list[dict]:
     claims = recommendation_module.load_claim_units(recommendation_module.CLAIM_UNITS)
     records = recommendation_module.load_records(recommendation_module.DEDUPED_RESULTS)
-    recommendations = recommendation_module.build_recommendations(claims, records)
+    paper_rules = recommendation_module.PAPER_DIR / "claim_recommendation_rules.yaml"
+    rules_path = paper_rules if paper_rules.exists() else recommendation_module.RULES_CONFIG
+    rules = recommendation_module.load_rules(rules_path)
+    recommendations = recommendation_module.build_recommendations(claims, records, rules)
 
     unique_papers: dict[str, dict] = {}
     for item in recommendations.values():

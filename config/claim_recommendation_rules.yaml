@@ -33,3 +33,26 @@ claim_notes:
   C19: Differentiated-governance support is partly indirect; validate policy framing against your target sentence.
   C20: Current recommendations are provisional; retrieval for decongestion/redundancy remains weaker than other claims.
   C21: Current recommendations are usable but corridor-specific structural-convergence support is still moderate in strength.
+
+# Main recommendation output size per claim.
+selected_papers_limit: 3
+
+# Query quality weights are applied to support and rank signals.
+query_status_weights:
+  keep: 1.0
+  review: 0.6
+  rewrite: 0.25
+  exclude: 0.0
+
+# Claim-fit should dominate. Citation counts remain a secondary signal.
+score_weights:
+  title_claim_overlap: 4.0
+  abstract_claim_overlap: 1.75
+  title_query_overlap: 2.5
+  abstract_query_overlap: 1.0
+  support_count: 0.75
+  weighted_support: 2.5
+  best_rank_reciprocal: 3.0
+  mean_rank_reciprocal: 1.5
+  influential_citations: 0.8
+  citations: 0.3
