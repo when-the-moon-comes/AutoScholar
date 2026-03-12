@@ -1,0 +1,60 @@
+# Relative paths are resolved from this file's directory.
+
+# Claim units extracted from the manuscript.
+claim_units: ../paper/citation_claim_units.md
+
+# Deduplicated Semantic Scholar search results.
+deduped_results: ../paper/semantic_scholar_raw_results_deduped.jsonl
+
+# Recommendation rules used by the existing claim recommendation step.
+# Prefer a paper-specific rules file when one exists.
+recommendation_rules: ../paper/claim_recommendation_rules.yaml
+
+# Standalone outputs for the correction pass.
+output_jsonl: ../paper/semantic_scholar_recommendation_corrections.jsonl
+output_report: ../paper/semantic_scholar_recommendation_correction_report.md
+
+# Optional list of claim IDs to process.
+claim_ids: []
+
+# When true, evaluate triggers and seed selection without calling the API.
+dry_run: false
+
+trigger:
+  # Trigger if the current claim recommendation stage surfaces fewer papers than this.
+  min_selected_papers: 2
+
+  # Trigger if no current candidate is supported by at least this many non-excluded queries.
+  min_cross_query_support: 2
+
+  # Trigger if the claim has only a small number of candidates and all of them are low-signal.
+  low_citation_threshold: 10
+  max_low_signal_candidates: 2
+
+  # Keep review and note based triggers enabled by default.
+  include_review_status: true
+  include_claim_notes: true
+
+seed:
+  # Maximum number of seed papers to send to Recommendations API per claim.
+  max_seeds_per_claim: 2
+
+  # Require at least this much claim/query textual overlap before a paper can be a seed.
+  min_total_overlap: 2
+
+recommendations:
+  # Number of recommendations to request per seed paper.
+  per_seed_limit: 5
+
+  # Number of merged candidates to keep in the correction outputs.
+  top_candidates_per_claim: 5
+
+  # Promote a corrected claim to `corrected_ready` only when enough top candidates look strong.
+  ready_candidate_count: 2
+  ready_min_total_overlap: 3
+
+  # Small pause to avoid bursty unauthenticated traffic.
+  pause_seconds: 0.2
+
+  # Metadata fields requested from Recommendations API.
+  fields: paperId,title,year,authors,url,abstract,citationCount,influentialCitationCount,venue,externalIds,isOpenAccess,openAccessPdf
