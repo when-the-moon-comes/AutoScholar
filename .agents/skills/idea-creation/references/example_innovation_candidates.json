@@ -1,0 +1,21 @@
+{
+  "candidates": [
+    {
+      "id": "C1",
+      "source_assumption_ids": [
+        "A1"
+      ],
+      "assumption_broken": "All classes are known at training time.",
+      "innovation_direction": "Open-set recognition for industrial partial discharge patterns",
+      "real_world_motivation": "Industrial monitoring systems run for years and encounter degradation patterns that were not present in the original training data.",
+      "new_problem_formulation": "Classify known discharge types while rejecting or flagging unknown types that were not seen during training.",
+      "core_technical_challenge": "Separate known-class regions from open space without producing overconfident predictions on unknown inputs.",
+      "candidate_title": "Open-Set Recognition for Industrial Partial Discharge Pattern Classification",
+      "novelty_search_queries": [
+        "open-set recognition partial discharge",
+        "open-set industrial fault classification",
+        "unknown class rejection industrial inspection"
+      ]
+    }
+  ]
+}

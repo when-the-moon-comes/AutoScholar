@@ -1,0 +1,7 @@
+interface:
+  display_name: "Idea Creation"
+  short_description: "Generate research idea cards from a seed paper and verify novelty with Semantic Scholar."
+  default_prompt: "Use $idea-creation to turn this seed paper into structured research idea cards and verify novelty with Semantic Scholar."
+
+policy:
+  allow_implicit_invocation: true
