@@ -9,7 +9,7 @@ import httpx
 from autoscholar.citation.config import SearchConfig
 from autoscholar.citation.common import paper_key, utc_now
 from autoscholar.integrations import SemanticScholarClient
-from autoscholar.io import append_jsonl, read_jsonl
+from autoscholar.io import read_jsonl, write_jsonl
 from autoscholar.models import PaperRecord, QueryRecord, SearchFailureRecord, SearchResultRecord
 from autoscholar.workspace import Workspace
 
@@ -189,38 +189,121 @@ def _execute_query(query: QueryRecord, config: SearchConfig) -> tuple[bool, Sear
     raise RuntimeError(f"Unexpected search control flow for query: {query.query_id}")
 
 
+def _result_matches_query(query: QueryRecord, record: SearchResultRecord) -> bool:
+    return (
+        record.query_id == query.query_id
+        and record.claim_id == query.claim_id
+        and record.query_text == query.query_text
+        and record.short_label == query.short_label
+    )
+
+
+def _failure_matches_query(query: QueryRecord, record: SearchFailureRecord) -> bool:
+    return (
+        record.query_id == query.query_id
+        and record.claim_id == query.claim_id
+        and record.query_text == query.query_text
+    )
+
+
+def _load_existing_results(
+    queries: list[QueryRecord],
+    raw_output,
+    failures_output,
+) -> tuple[dict[str, SearchResultRecord], dict[str, SearchFailureRecord]]:
+    by_query = {query.query_id: query for query in queries}
+
+    existing_results: dict[str, SearchResultRecord] = {}
+    if raw_output.exists() and raw_output.read_text(encoding="utf-8").strip():
+        for record in read_jsonl(raw_output, SearchResultRecord):
+            query = by_query.get(record.query_id)
+            if query is None or not _result_matches_query(query, record):
+                continue
+            existing_results[record.query_id] = record
+
+    existing_failures: dict[str, SearchFailureRecord] = {}
+    if failures_output.exists() and failures_output.read_text(encoding="utf-8").strip():
+        for record in read_jsonl(failures_output, SearchFailureRecord):
+            query = by_query.get(record.query_id)
+            if query is None or record.query_id in existing_results or not _failure_matches_query(query, record):
+                continue
+            existing_failures[record.query_id] = record
+
+    return existing_results, existing_failures
+
+
+def _ordered_results(
+    queries: list[QueryRecord],
+    results: dict[str, SearchResultRecord],
+) -> list[SearchResultRecord]:
+    ordered: list[SearchResultRecord] = []
+    for query in queries:
+        record = results.get(query.query_id)
+        if record is not None:
+            ordered.append(record)
+    return ordered
+
+
+def _ordered_failures(
+    queries: list[QueryRecord],
+    failures: dict[str, SearchFailureRecord],
+    completed_query_ids: set[str],
+) -> list[SearchFailureRecord]:
+    ordered: list[SearchFailureRecord] = []
+    for query in queries:
+        if query.query_id in completed_query_ids:
+            continue
+        record = failures.get(query.query_id)
+        if record is not None:
+            ordered.append(record)
+    return ordered
+
+
+def _flush_search_state(
+    queries: list[QueryRecord],
+    raw_output,
+    failures_output,
+    results: dict[str, SearchResultRecord],
+    failures: dict[str, SearchFailureRecord],
+) -> None:
+    write_jsonl(raw_output, _ordered_results(queries, results))
+    write_jsonl(failures_output, _ordered_failures(queries, failures, set(results)))
+
+
 def run_search(workspace: Workspace, config: SearchConfig) -> tuple[int, int]:
     queries = read_jsonl(workspace.require_path("artifacts", "queries"), QueryRecord)
     raw_output = workspace.require_path("artifacts", "search_results_raw")
     failures_output = workspace.require_path("artifacts", "search_failures")
-    raw_output.write_text("", encoding="utf-8")
-    failures_output.write_text("", encoding="utf-8")
-
-    success_count = 0
-    failure_count = 0
+    existing_results, existing_failures = _load_existing_results(queries, raw_output, failures_output)
+    pending_queries = [query for query in queries if query.query_id not in existing_results]
     profile = config.profile()
 
+    _flush_search_state(queries, raw_output, failures_output, existing_results, existing_failures)
+
+    if not pending_queries:
+        return len(existing_results), len(existing_failures)
+
     if config.mode == "single_thread":
-        for index, query in enumerate(queries, start=1):
+        for index, query in enumerate(pending_queries, start=1):
             success, payload = _execute_query(query, config)
             if success:
-                append_jsonl(raw_output, payload)
-                success_count += 1
+                existing_results[query.query_id] = payload
+                existing_failures.pop(query.query_id, None)
             else:
-                append_jsonl(failures_output, payload)
-                failure_count += 1
-            if index < len(queries) and profile.pause_seconds > 0:
+                existing_failures[query.query_id] = payload
+            _flush_search_state(queries, raw_output, failures_output, existing_results, existing_failures)
+            if index < len(pending_queries) and profile.pause_seconds > 0:
                 time.sleep(profile.pause_seconds)
-        return success_count, failure_count
+        return len(existing_results), len(existing_failures)
 
     with cf.ThreadPoolExecutor(max_workers=profile.workers) as executor:
-        futures = [executor.submit(_execute_query, query, config) for query in queries]
+        futures = [executor.submit(_execute_query, query, config) for query in pending_queries]
         for future in cf.as_completed(futures):
             success, payload = future.result()
             if success:
-                append_jsonl(raw_output, payload)
-                success_count += 1
+                existing_results[payload.query_id] = payload
+                existing_failures.pop(payload.query_id, None)
             else:
-                append_jsonl(failures_output, payload)
-                failure_count += 1
-    return success_count, failure_count
+                existing_failures[payload.query_id] = payload
+            _flush_search_state(queries, raw_output, failures_output, existing_results, existing_failures)
+    return len(existing_results), len(existing_failures)
