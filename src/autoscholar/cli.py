@@ -10,6 +10,7 @@ from autoscholar.analysis import assess_idea
 from autoscholar.citation import build_shortlist, run_correction, run_prescreen, run_search, write_bibtex
 from autoscholar.citation.config import CitationRulesConfig, IdeaEvaluationConfig, RecommendationConfig, SearchConfig
 from autoscholar.io import read_json, read_json_list, read_json_model, read_jsonl, read_yaml
+from autoscholar.journal_fit import JournalFitRunner, JournalFitWorkspace, derive_paper_id
 from autoscholar.models import (
     ClaimRecord,
     EvidenceMapRecord,
@@ -37,6 +38,7 @@ report_app = typer.Typer(help="Report rendering commands.")
 schema_app = typer.Typer(help="JSON schema export commands.")
 semantic_app = typer.Typer(help="Low-level Semantic Scholar API commands.")
 util_app = typer.Typer(help="Utility commands.")
+jfa_app = typer.Typer(help="Journal-fit-advisor workflow commands.")
 
 app.add_typer(workspace_app, name="workspace")
 app.add_typer(citation_app, name="citation")
@@ -45,6 +47,7 @@ app.add_typer(report_app, name="report")
 app.add_typer(schema_app, name="schema")
 app.add_typer(semantic_app, name="semantic")
 app.add_typer(util_app, name="util")
+app.add_typer(jfa_app, name="jfa")
 
 
 def _load_workspace(path: Path) -> Workspace:
@@ -237,6 +240,127 @@ def schema_export(output_dir: Path = typer.Option(..., "--output-dir")) -> None:
     written = export_json_schemas(output_dir)
     for path in written:
         typer.echo(f"Wrote: {path}")
+
+
+def _load_jfa_runner(base_dir: Path, paper_id: str) -> JournalFitRunner:
+    return JournalFitRunner(JournalFitWorkspace(base_dir=base_dir, paper_id=paper_id))
+
+
+@jfa_app.command("init")
+def jfa_init(
+    base_dir: Path = typer.Option(Path("."), "--base-dir"),
+    paper_id: str | None = typer.Option(None, "--paper-id"),
+    working_title: str | None = typer.Option(None, "--working-title"),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Overwrite the input template if it already exists."),
+) -> None:
+    resolved_paper_id = paper_id or (derive_paper_id(working_title or "") if working_title else None)
+    if not resolved_paper_id:
+        raise typer.BadParameter("Provide either --paper-id or --working-title.")
+    workspace = JournalFitWorkspace(base_dir=base_dir, paper_id=resolved_paper_id).ensure_layout()
+    template_path = workspace.bootstrap_template(overwrite=overwrite)
+    typer.echo(f"Initialized JFA workspace: {workspace.root}")
+    typer.echo(f"Input template: {template_path}")
+
+
+@jfa_app.command("run")
+def jfa_run(
+    paper_id: str = typer.Option(..., "--paper-id"),
+    base_dir: Path = typer.Option(Path("."), "--base-dir"),
+    input_path: Path | None = typer.Option(None, "--input"),
+    draft_pdf: Path | None = typer.Option(None, "--draft-pdf"),
+    no_cache: bool = typer.Option(False, "--no-cache"),
+) -> None:
+    summary = _load_jfa_runner(base_dir, paper_id).run(
+        input_path=input_path,
+        draft_pdf=draft_pdf,
+        use_cache=not no_cache,
+    )
+    typer.echo(f"Primary: {summary.primary_narrative} x {summary.primary_journal}")
+    typer.echo(f"Risk: {summary.primary_risk}")
+    if summary.backup_narrative and summary.backup_journal:
+        typer.echo(f"Backup: {summary.backup_narrative} x {summary.backup_journal}")
+    for warning in summary.warnings:
+        typer.echo(f"Warning: {warning}")
+    for item in summary.action_items:
+        typer.echo(f"- {item}")
+    typer.echo(f"Report: {summary.report_path}")
+
+
+@jfa_app.command("phase0")
+def jfa_phase0(
+    paper_id: str = typer.Option(..., "--paper-id"),
+    base_dir: Path = typer.Option(Path("."), "--base-dir"),
+    input_path: Path | None = typer.Option(None, "--input"),
+    draft_pdf: Path | None = typer.Option(None, "--draft-pdf"),
+) -> None:
+    run_meta = _load_jfa_runner(base_dir, paper_id).phase0(input_path=input_path, draft_pdf=draft_pdf)
+    typer.echo(f"Phase 0 complete. mode={run_meta.mode} journals={len(run_meta.target_journals)}")
+
+
+@jfa_app.command("phase1")
+def jfa_phase1(
+    paper_id: str = typer.Option(..., "--paper-id"),
+    base_dir: Path = typer.Option(Path("."), "--base-dir"),
+) -> None:
+    inventory = _load_jfa_runner(base_dir, paper_id).phase1()
+    typer.echo(f"Phase 1 complete. assets={len(inventory.assets)}")
+
+
+@jfa_app.command("phase2")
+def jfa_phase2(
+    paper_id: str = typer.Option(..., "--paper-id"),
+    base_dir: Path = typer.Option(Path("."), "--base-dir"),
+    journal: str | None = typer.Option(None, "--journal"),
+    no_cache: bool = typer.Option(False, "--no-cache"),
+) -> None:
+    profiles = _load_jfa_runner(base_dir, paper_id).phase2(journal_name=journal, use_cache=not no_cache)
+    typer.echo(f"Phase 2 complete. journals={len(profiles)}")
+
+
+@jfa_app.command("phase3")
+def jfa_phase3(
+    paper_id: str = typer.Option(..., "--paper-id"),
+    base_dir: Path = typer.Option(Path("."), "--base-dir"),
+) -> None:
+    narratives = _load_jfa_runner(base_dir, paper_id).phase3()
+    typer.echo(f"Phase 3 complete. narratives={len(narratives)}")
+
+
+@jfa_app.command("phase4")
+def jfa_phase4(
+    paper_id: str = typer.Option(..., "--paper-id"),
+    base_dir: Path = typer.Option(Path("."), "--base-dir"),
+) -> None:
+    matrix = _load_jfa_runner(base_dir, paper_id).phase4()
+    typer.echo(f"Phase 4 complete. combinations={len(matrix.matrix)} top={len(matrix.top_combinations)}")
+
+
+@jfa_app.command("phase5")
+def jfa_phase5(
+    paper_id: str = typer.Option(..., "--paper-id"),
+    base_dir: Path = typer.Option(Path("."), "--base-dir"),
+) -> None:
+    paths = _load_jfa_runner(base_dir, paper_id).phase5()
+    typer.echo(f"Phase 5 complete. skeletons={len(paths)}")
+
+
+@jfa_app.command("phase6")
+def jfa_phase6(
+    paper_id: str = typer.Option(..., "--paper-id"),
+    base_dir: Path = typer.Option(Path("."), "--base-dir"),
+) -> None:
+    reviews, patches = _load_jfa_runner(base_dir, paper_id).phase6()
+    typer.echo(f"Phase 6 complete. reviews={len(reviews.reviews)} patches={len(patches.patches)}")
+
+
+@jfa_app.command("phase7")
+def jfa_phase7(
+    paper_id: str = typer.Option(..., "--paper-id"),
+    base_dir: Path = typer.Option(Path("."), "--base-dir"),
+) -> None:
+    summary = _load_jfa_runner(base_dir, paper_id).phase7()
+    typer.echo(f"Primary: {summary.primary_narrative} x {summary.primary_journal}")
+    typer.echo(f"Report: {summary.report_path}")
 
 
 @util_app.command("pdf-to-text")

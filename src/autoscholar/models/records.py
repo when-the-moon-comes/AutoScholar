@@ -293,6 +293,8 @@ class WorkspaceManifest(BaseModel):
 
 
 def export_json_schemas(output_dir: Path) -> list[Path]:
+    from autoscholar.journal_fit.models import export_journal_fit_schemas
+
     output_dir.mkdir(parents=True, exist_ok=True)
     models: dict[str, type[BaseModel]] = {
         "workspace_manifest": WorkspaceManifest,
@@ -311,4 +313,5 @@ def export_json_schemas(output_dir: Path) -> list[Path]:
         path = output_dir / f"{name}.schema.json"
         path.write_text(json.dumps(model.model_json_schema(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         written.append(path)
+    written.extend(export_journal_fit_schemas(output_dir))
     return written

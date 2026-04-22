@@ -37,6 +37,7 @@ def test_schema_export(tmp_path: Path) -> None:
     result = runner.invoke(app, ["schema", "export", "--output-dir", str(output_dir)])
     assert result.exit_code == 0, result.stdout
     assert (output_dir / "workspace_manifest.schema.json").exists()
+    assert (output_dir / "assets.schema.json").exists()
 
 
 class _FakeSemanticClient:
