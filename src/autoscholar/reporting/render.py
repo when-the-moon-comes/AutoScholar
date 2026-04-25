@@ -7,7 +7,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 from autoscholar.citation.config import IdeaEvaluationConfig
-from autoscholar.io import read_json_list, read_jsonl, read_yaml, write_text
+from autoscholar.io import read_json, read_json_list, read_jsonl, read_yaml, write_text
 from autoscholar.models import ClaimRecord, QueryReviewRecord, SelectedCitationRecord
 from autoscholar.reporting.authoring import build_deep_dive_context, build_feasibility_context
 from autoscholar.workspace import Workspace
@@ -36,6 +36,12 @@ def _language_labels(language: str) -> dict[str, str]:
         "rewrite": "rewrite",
         "exclude": "exclude",
     }
+
+
+def _read_optional_json(path: Path | None) -> dict:
+    if path is None or not path.exists():
+        return {}
+    return read_json(path)
 
 
 def render_report(workspace: Workspace, kind: str) -> Path:
@@ -95,6 +101,20 @@ def render_report(workspace: Workspace, kind: str) -> Path:
         output_path = workspace.require_path("reports", "deep_dive")
         template = env.get_template("report_deep_dive.md.j2")
         content = template.render(language=language, labels=labels, **context)
+    elif kind == "idea-conversation":
+        output_path = workspace.require_path("reports", "conversation_record")
+        template = env.get_template("report_idea_conversation.md.j2")
+        content = template.render(
+            language=language,
+            labels=labels,
+            stages={
+                "stage1": _read_optional_json(workspace.path("artifacts", "stage1")),
+                "stage2": _read_optional_json(workspace.path("artifacts", "stage2")),
+                "stage3": _read_optional_json(workspace.path("artifacts", "stage3")),
+                "stage4": _read_optional_json(workspace.path("artifacts", "stage4")),
+                "stage5": _read_optional_json(workspace.path("artifacts", "stage5")),
+            },
+        )
     else:
         raise ValueError(f"Unsupported report kind: {kind}")
 

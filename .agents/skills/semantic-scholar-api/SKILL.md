@@ -45,7 +45,21 @@ Use the `autoscholar semantic` command group for direct inspection and debugging
 - `autoscholar semantic author <author_id>`
 - `autoscholar semantic author-papers <author_id>`
 - `autoscholar semantic download-pdf <paper_id>`
+- `autoscholar semantic crawl --query <query>` for checkpointed multi-run search
 - `autoscholar semantic smoke`
+
+## Resumable Crawling
+
+Use `autoscholar semantic crawl` when a search may hit rate limits or needs to be split across runs.
+
+Examples:
+
+```powershell
+autoscholar semantic crawl --query "retrieval augmented generation" --query "graph RAG" --limit 5 --max-retries 1
+autoscholar semantic crawl --queries-file paper/semantic_queries.txt --output paper/semantic_crawl_results.jsonl --failures paper/semantic_crawl_failures.jsonl --limit 10 --max-queries 3
+```
+
+The command writes successes and failures after every query. Re-running the same command skips successful queries and retries failed or unfinished ones by default.
 
 ## Notes
 

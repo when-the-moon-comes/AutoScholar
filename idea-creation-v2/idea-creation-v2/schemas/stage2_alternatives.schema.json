@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Stage 2 Alternatives Artifact",
+  "type": "object",
+  "required": ["stage", "alternatives", "ranking", "ranking_rationale", "selected_for_stage3"],
+  "properties": {
+    "stage": {"const": 2},
+    "alternatives": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["id", "framing", "kill_point_vs_original", "dimension_of_difference"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^alt[0-9]+$"},
+          "framing": {"type": "string"},
+          "kill_point_vs_original": {
+            "type": "string",
+            "description": "这个 alternative 最能 kill 原版的地方"
+          },
+          "dimension_of_difference": {
+            "type": "string",
+            "enum": [
+              "problem_space_redefinition",
+              "success_criterion_redefinition",
+              "beneficiary_redefinition",
+              "timeline_redefinition",
+              "other"
+            ]
+          },
+          "literature_density": {
+            "type": "string",
+            "enum": ["sparse", "medium", "crowded"]
+          },
+          "representative_existing_papers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "paper_id": {"type": "string"},
+                "title": {"type": "string"},
+                "year": {"type": "integer"},
+                "relevance_note": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "original_included_in_ranking": {"const": true},
+    "ranking": {
+      "type": "array",
+      "description": "按优先级排序的 id 列表，必须包含 'original'",
+      "items": {"type": "string"}
+    },
+    "ranking_rationale": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["position", "item", "reason"],
+        "properties": {
+          "position": {"type": "integer"},
+          "item": {"type": "string"},
+          "reason": {
+            "type": "string",
+            "description": "理由不能以 '我熟悉' 或 '沉没成本' 为基础"
+          },
+          "rationale_health_flag": {
+            "type": "string",
+            "enum": ["healthy", "red_flag_familiarity", "red_flag_sunk_cost", "red_flag_vague"],
+            "description": "Claude 对理由健康度的评估"
+          }
+        }
+      }
+    },
+    "selected_for_stage3": {"type": "string"}
+  }
+}

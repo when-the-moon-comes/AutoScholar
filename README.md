@@ -50,6 +50,14 @@ autoscholar report validate --workspace D:\workspaces\idea-demo --kind feasibili
 autoscholar report validate --workspace D:\workspaces\idea-demo --kind deep-dive
 ```
 
+Run the idea-creation-v2 incubation workspace:
+
+```powershell
+autoscholar workspace init D:\workspaces\my-idea --template idea-creation-v2 --reports-lang zh
+autoscholar workspace doctor --workspace D:\workspaces\my-idea
+autoscholar report render --workspace D:\workspaces\my-idea --kind idea-conversation
+```
+
 ## Workspace Model
 
 Every workspace is explicit and self-contained. `autoscholar workspace init` creates:
@@ -64,7 +72,7 @@ The manifest is the single source of truth for logical paths. AutoScholar no lon
 
 ## Skills
 
-AutoScholar ships with six skills:
+AutoScholar ships with six installed skills:
 
 - `.agents/skills/autoscholar`
 - `.agents/skills/citation-workflow`
@@ -72,6 +80,8 @@ AutoScholar ships with six skills:
 - `.agents/skills/semantic-scholar-api`
 - `.agents/skills/report-authoring`
 - `.agents/skills/journal-fit-advisor`
+
+The `idea-creation-v2` module source lives at `idea-creation-v2/idea-creation-v2` and is wired into the workspace/report CLI as `--template idea-creation-v2` and `--kind idea-conversation`.
 
 The top-level `autoscholar` skill explains capability routing. The workflow skills explain how to combine commands and structured artifacts. The API skill is for low-level Semantic Scholar operations and debugging.
 

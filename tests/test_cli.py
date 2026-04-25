@@ -32,6 +32,37 @@ def test_workspace_init_and_doctor(tmp_path: Path) -> None:
     assert doctor.exit_code == 0, doctor.stdout
 
 
+def test_idea_creation_v2_workspace_init_render_and_doctor(tmp_path: Path) -> None:
+    workspace_dir = tmp_path / "idea-v2-demo"
+    result = runner.invoke(
+        app,
+        [
+            "workspace",
+            "init",
+            str(workspace_dir),
+            "--template",
+            "idea-creation-v2",
+            "--reports-lang",
+            "zh",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    assert (workspace_dir / "inputs" / "idea_seed.md").exists()
+    assert (workspace_dir / "configs" / "conversation.yaml").exists()
+    assert (workspace_dir / "artifacts" / "retrieval").is_dir()
+
+    doctor = runner.invoke(app, ["workspace", "doctor", "--workspace", str(workspace_dir)])
+    assert doctor.exit_code == 0, doctor.stdout
+
+    render = runner.invoke(
+        app, ["report", "render", "--workspace", str(workspace_dir), "--kind", "idea-conversation"]
+    )
+    assert render.exit_code == 0, render.stdout
+    record = workspace_dir / "reports" / "idea_conversation_record.md"
+    assert record.exists()
+    assert "Stage 1 Diagnosis" in record.read_text(encoding="utf-8")
+
+
 def test_schema_export(tmp_path: Path) -> None:
     output_dir = tmp_path / "schemas"
     result = runner.invoke(app, ["schema", "export", "--output-dir", str(output_dir)])

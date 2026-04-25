@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Stage 3 Method-Space Pruning Artifact",
+  "type": "object",
+  "required": [
+    "stage",
+    "selected_framing_id",
+    "real_constraints",
+    "elimination_trace",
+    "survivors",
+    "selected_or_deferred"
+  ],
+  "properties": {
+    "stage": {"const": 3},
+    "selected_framing_id": {"type": "string"},
+    "real_constraints": {
+      "type": "object",
+      "description": "研究者的真实约束，每条应尽可能二元化",
+      "properties": {
+        "time": {"type": "string"},
+        "compute": {"type": "string"},
+        "data": {"type": "string"},
+        "collaborators": {"type": "string"},
+        "psychological_cost": {"type": "string"},
+        "other": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "elimination_trace": {
+      "type": "array",
+      "minItems": 3,
+      "description": "消元过程必须可见；至少列出 3 个被杀的方法家族",
+      "items": {
+        "type": "object",
+        "required": ["method_family", "killed_by_constraint", "reasoning"],
+        "properties": {
+          "method_family": {"type": "string"},
+          "killed_by_constraint": {"type": "string"},
+          "reasoning": {"type": "string"}
+        }
+      }
+    },
+    "survivors": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["method_family", "max_technical_risk", "marginal_pass"],
+        "properties": {
+          "method_family": {"type": "string"},
+          "max_technical_risk": {"type": "string"},
+          "marginal_pass": {
+            "type": "boolean",
+            "description": "如果是勉强存活（某约束是 marginal pass），标记为 true"
+          },
+          "literature_density": {
+            "type": "string",
+            "enum": ["sparse", "medium", "crowded"]
+          },
+          "recent_sota_papers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "paper_id": {"type": "string"},
+                "title": {"type": "string"},
+                "year": {"type": "integer"}
+              }
+            }
+          },
+          "field_momentum": {
+            "type": "string",
+            "enum": ["rising", "steady", "cooling", "abandoned", "unclear"],
+            "description": "基于 shortlist 的活跃度判断"
+          }
+        }
+      }
+    },
+    "selected_or_deferred": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["selected", "deferred_pending_toy_experiment", "bounced_back_to_stage2"]
+        },
+        "selected_method_family": {"type": "string"},
+        "toy_experiment_plan": {"type": "string"},
+        "bounce_back_reason": {"type": "string"}
+      }
+    }
+  }
+}

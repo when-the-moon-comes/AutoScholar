@@ -1,0 +1,48 @@
+{
+  "track_a_candidates": [
+    {
+      "id": "CA1",
+      "track": "A",
+      "source_assumption_ids": [
+        "A1"
+      ],
+      "assumption_broken": "Training data is centralized and can be pooled before training.",
+      "innovation_direction": "Federated organ segmentation for cross-hospital deployment",
+      "real_world_motivation": "Hospitals often cannot share raw scans because of privacy and governance constraints, but they still need a model that learns across sites.",
+      "new_problem_formulation": "Train a segmentation model collaboratively across multiple institutions without centralizing the raw imaging data.",
+      "core_technical_challenge": "Handle client drift, annotation heterogeneity, and communication-efficient optimization without losing spatial accuracy.",
+      "candidate_title": "Federated Multi-Organ Segmentation Across Heterogeneous Hospitals",
+      "novelty_search_queries": [
+        "federated organ segmentation heterogeneous hospitals",
+        "federated medical image segmentation cross hospital",
+        "privacy preserving multi organ segmentation"
+      ]
+    }
+  ],
+  "track_b_candidates": [
+    {
+      "id": "CB1",
+      "track": "B",
+      "source_insight_id": "I1",
+      "principle_being_transferred": "Selective early fusion improves dense prediction more than uniform deep fusion.",
+      "target_domain": "video temporal boundary detection",
+      "transfer_justification": "Both tasks require precise boundary recovery under a multi-scale hierarchy, and excessive late-stage global mixing can blur the structures that matter.",
+      "innovation_direction": "Selective early fusion for temporal boundary detection in videos",
+      "real_world_motivation": "Temporal boundary detectors need precise transition localization, and late heavy context fusion may smooth away the cues that define short events.",
+      "new_problem_formulation": "Detect temporal boundaries while prioritizing early high-resolution feature fusion and constraining late-stage global mixing.",
+      "core_technical_challenge": "Preserve temporal precision while still modeling enough long-range context to avoid fragmented detections.",
+      "candidate_title": "Selective Early Fusion for Precise Temporal Boundary Detection in Video",
+      "convergence_with": "CA1",
+      "novelty_search_queries": [
+        "video temporal boundary detection fusion transformer",
+        "temporal action boundary detection multi scale fusion",
+        "dense video boundary detection attention fusion"
+      ],
+      "principle_level_search_queries": [
+        "selective early fusion temporal boundary detection",
+        "limited late fusion precise video boundary detection",
+        "reduced global mixing dense video prediction"
+      ]
+    }
+  ]
+}

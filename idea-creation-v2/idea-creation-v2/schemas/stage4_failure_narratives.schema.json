@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Stage 4 Failure Narratives Artifact",
+  "type": "object",
+  "required": ["stage", "narratives"],
+  "properties": {
+    "stage": {"const": 4},
+    "narratives": {
+      "type": "array",
+      "minItems": 3,
+      "description": "必须至少包含 evaluation / impact / timing 三类各一个",
+      "items": {
+        "type": "object",
+        "required": ["type", "narrative", "user_response"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["evaluation", "impact", "timing"]
+          },
+          "narrative": {
+            "type": "string",
+            "description": "3-5 句，写得像真的 meta-review 段落"
+          },
+          "user_response": {
+            "type": "string",
+            "enum": [
+              "prevention_designed",
+              "acknowledged_residual_risk",
+              "claimed_wont_happen"
+            ],
+            "description": "claimed_wont_happen 默认不接受，需要额外论证"
+          },
+          "prevention_design": {
+            "type": "string",
+            "description": "具体的预防设计——evaluation 里加什么、architecture 里改什么、scope 里限定什么"
+          },
+          "residual_risk_statement": {
+            "type": "string",
+            "description": "研究者承认无法预防的风险声明"
+          },
+          "wont_happen_argument": {
+            "type": "string",
+            "description": "若研究者选择 claimed_wont_happen，这里必填论证"
+          },
+          "supporting_evidence_from_retrieval": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "paper_id": {"type": "string"},
+                "title": {"type": "string"},
+                "relevance": {"type": "string"},
+                "evidence_type": {
+                  "type": "string",
+                  "enum": ["silent_failure", "ceiling_signal", "external_trend", "close_predecessor"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

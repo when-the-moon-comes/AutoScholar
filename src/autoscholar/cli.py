@@ -26,6 +26,12 @@ from autoscholar.models import (
     export_json_schemas,
 )
 from autoscholar.reporting import build_evidence_map, render_report, validate_report
+from autoscholar.semantic_crawl import (
+    SemanticCrawlConfig,
+    crawl_semantic_queries,
+    load_queries_file,
+    normalize_queries,
+)
 from autoscholar.utils import pdf_to_text
 from autoscholar.workspace import Workspace, dump_manifest, workspace_summary
 from autoscholar.integrations import SemanticScholarClient
@@ -77,7 +83,7 @@ def _load_idea_config(workspace: Workspace) -> IdeaEvaluationConfig:
 @workspace_app.command("init")
 def workspace_init(
     target_dir: Path,
-    template: str = typer.Option(..., "--template", help="citation-paper or idea-evaluation"),
+    template: str = typer.Option(..., "--template", help="citation-paper, idea-evaluation, or idea-creation-v2"),
     reports_lang: str = typer.Option("zh", "--reports-lang", help="zh or en"),
 ) -> None:
     workspace = Workspace.init(
@@ -95,25 +101,37 @@ def workspace_doctor(workspace_dir: Path = typer.Option(..., "--workspace")) -> 
     issues = workspace.doctor()
     for loader in (
         lambda: WorkspaceManifest.model_validate(read_yaml(workspace.root / "workspace.yaml")),
-        lambda: SearchConfig.model_validate(read_yaml(workspace.require_path("configs", "search"))),
-        lambda: RecommendationConfig.model_validate(read_yaml(workspace.require_path("configs", "recommendation"))),
-        lambda: CitationRulesConfig.model_validate(read_yaml(workspace.require_path("configs", "citation_rules"))),
-        lambda: IdeaEvaluationConfig.model_validate(read_yaml(workspace.require_path("configs", "idea_evaluation"))),
+        lambda: SearchConfig.model_validate(read_yaml(workspace.require_path("configs", "search")))
+        if workspace.path("configs", "search") is not None
+        else None,
+        lambda: RecommendationConfig.model_validate(read_yaml(workspace.require_path("configs", "recommendation")))
+        if workspace.path("configs", "recommendation") is not None
+        else None,
+        lambda: CitationRulesConfig.model_validate(read_yaml(workspace.require_path("configs", "citation_rules")))
+        if workspace.path("configs", "citation_rules") is not None
+        else None,
+        lambda: IdeaEvaluationConfig.model_validate(read_yaml(workspace.require_path("configs", "idea_evaluation")))
+        if workspace.path("configs", "idea_evaluation") is not None
+        else None,
     ):
         try:
             loader()
         except Exception as exc:
             issues.append(str(exc))
 
-    for path, model in (
-        (workspace.require_path("artifacts", "claims"), ClaimRecord),
-        (workspace.require_path("artifacts", "queries"), QueryRecord),
-        (workspace.require_path("artifacts", "search_results_raw"), SearchResultRecord),
-        (workspace.require_path("artifacts", "search_results_deduped"), SearchResultRecord),
-        (workspace.require_path("artifacts", "search_failures"), SearchFailureRecord),
-        (workspace.require_path("artifacts", "recommendation_corrections"), RecommendationCorrectionRecord),
-        (workspace.require_path("artifacts", "selected_citations"), SelectedCitationRecord),
-    ):
+    jsonl_checks = (
+        ("claims", ClaimRecord),
+        ("queries", QueryRecord),
+        ("search_results_raw", SearchResultRecord),
+        ("search_results_deduped", SearchResultRecord),
+        ("search_failures", SearchFailureRecord),
+        ("recommendation_corrections", RecommendationCorrectionRecord),
+        ("selected_citations", SelectedCitationRecord),
+    )
+    for artifact_name, model in jsonl_checks:
+        path = workspace.path("artifacts", artifact_name)
+        if path is None:
+            continue
         try:
             if path.exists() and path.read_text(encoding="utf-8").strip():
                 read_jsonl(path, model)
@@ -121,25 +139,28 @@ def workspace_doctor(workspace_dir: Path = typer.Option(..., "--workspace")) -> 
             issues.append(str(exc))
 
     try:
-        query_reviews_path = workspace.require_path("artifacts", "query_reviews")
-        if query_reviews_path.exists():
+        query_reviews_path = workspace.path("artifacts", "query_reviews")
+        if query_reviews_path is not None and query_reviews_path.exists():
             read_json_list(query_reviews_path, "query_reviews", QueryReviewRecord)
     except Exception as exc:
         issues.append(str(exc))
 
-    idea_assessment_path = workspace.require_path("artifacts", "idea_assessment")
+    idea_assessment_path = workspace.path("artifacts", "idea_assessment")
     try:
-        if idea_assessment_path.exists():
+        if idea_assessment_path is not None and idea_assessment_path.exists():
             payload = read_json(idea_assessment_path)
             if payload:
                 read_json_model(idea_assessment_path, IdeaAssessmentRecord)
     except Exception as exc:
         issues.append(str(exc))
 
-    for path, model in (
-        (workspace.require_path("artifacts", "evidence_map"), EvidenceMapRecord),
-        (workspace.require_path("artifacts", "report_validation"), ReportValidationBundleRecord),
+    for artifact_name, model in (
+        ("evidence_map", EvidenceMapRecord),
+        ("report_validation", ReportValidationBundleRecord),
     ):
+        path = workspace.path("artifacts", artifact_name)
+        if path is None:
+            continue
         try:
             if path.exists():
                 payload = read_json(path)
@@ -211,7 +232,7 @@ def idea_assess(workspace_dir: Path = typer.Option(..., "--workspace")) -> None:
 @report_app.command("render")
 def report_render(
     workspace_dir: Path = typer.Option(..., "--workspace"),
-    kind: str = typer.Option(..., "--kind", help="prescreen, shortlist, feasibility, or deep-dive"),
+    kind: str = typer.Option(..., "--kind", help="prescreen, shortlist, feasibility, deep-dive, or idea-conversation"),
 ) -> None:
     normalized_kind = "deep-dive" if kind == "deep-dive" else kind
     path = render_report(_load_workspace(workspace_dir), normalized_kind)
@@ -409,6 +430,73 @@ def semantic_search(
             _dump_json({"endpoint": endpoint, "query": query, "count": len(payload), "data": payload})
             return
         _dump_json(client.search_papers(query=query, limit=limit, fields=fields, timeout=timeout))
+
+
+@semantic_app.command("crawl")
+def semantic_crawl(
+    queries: list[str] | None = typer.Option(
+        None,
+        "--query",
+        "-q",
+        help="Query text. May be passed multiple times.",
+    ),
+    queries_file: Path | None = typer.Option(
+        None,
+        "--queries-file",
+        help="Text, JSON, or JSONL file containing queries.",
+    ),
+    output: Path = typer.Option(Path("paper/semantic_crawl_results.jsonl"), "--output"),
+    failures: Path = typer.Option(Path("paper/semantic_crawl_failures.jsonl"), "--failures"),
+    endpoint: str = typer.Option("relevance", "--endpoint", help="relevance or bulk"),
+    limit: int = typer.Option(10, "--limit"),
+    fields: str = typer.Option(
+        "paperId,title,year,authors,url,abstract,citationCount,venue",
+        "--fields",
+    ),
+    timeout: float = typer.Option(30.0, "--timeout"),
+    max_retries: int = typer.Option(3, "--max-retries"),
+    retry_delay: float = typer.Option(30.0, "--retry-delay"),
+    pause_seconds: float = typer.Option(1.0, "--pause-seconds"),
+    retry_failed: bool = typer.Option(
+        True,
+        "--retry-failed/--skip-failed",
+        help="Retry failed queries from the failure checkpoint.",
+    ),
+    max_queries: int | None = typer.Option(
+        None,
+        "--max-queries",
+        help="Process at most this many pending queries in this run.",
+    ),
+    year: str | None = typer.Option(None, "--year", help="Bulk endpoint year filter."),
+    sort: str | None = typer.Option(None, "--sort", help="Bulk endpoint sort option."),
+    venue: str | None = typer.Option(None, "--venue", help="Bulk endpoint venue filter."),
+) -> None:
+    query_items = []
+    if queries:
+        query_items.extend(normalize_queries(queries))
+    if queries_file is not None:
+        query_items.extend(load_queries_file(queries_file))
+    if not query_items:
+        raise typer.BadParameter("Provide at least one --query or --queries-file.")
+
+    config = SemanticCrawlConfig(
+        output=output,
+        failures=failures,
+        endpoint=endpoint,
+        limit=limit,
+        fields=fields,
+        timeout=timeout,
+        max_retries=max_retries,
+        retry_delay=retry_delay,
+        pause_seconds=pause_seconds,
+        retry_failed=retry_failed,
+        max_queries=max_queries,
+        year=year,
+        sort=sort,
+        venue=venue,
+    )
+    summary = crawl_semantic_queries(query_items, config)
+    _dump_json(summary)
 
 
 @semantic_app.command("recommend")

@@ -251,40 +251,50 @@ class IdeaAssessmentRecord(BaseModel):
 class WorkspaceInputs(BaseModel):
     manuscript: str | None = None
     idea_source: str | None = None
+    idea_seed: str | None = None
+    constraints: str | None = None
 
 
 class WorkspaceConfigs(BaseModel):
-    search: str
-    recommendation: str
-    citation_rules: str
+    search: str | None = None
+    recommendation: str | None = None
+    citation_rules: str | None = None
     idea_evaluation: str | None = None
+    conversation: str | None = None
 
 
 class WorkspaceArtifacts(BaseModel):
-    claims: str
-    queries: str
-    search_results_raw: str
-    search_results_deduped: str
-    query_reviews: str
+    claims: str | None = None
+    queries: str | None = None
+    search_results_raw: str | None = None
+    search_results_deduped: str | None = None
+    query_reviews: str | None = None
     search_failures: str | None = None
-    recommendation_corrections: str
-    selected_citations: str
-    idea_assessment: str
+    recommendation_corrections: str | None = None
+    selected_citations: str | None = None
+    idea_assessment: str | None = None
     evidence_map: str | None = None
     report_validation: str | None = None
     references_bib: str | None = None
+    stage1: str | None = None
+    stage2: str | None = None
+    stage3: str | None = None
+    stage4: str | None = None
+    stage5: str | None = None
+    retrieval_dir: str | None = None
 
 
 class WorkspaceReports(BaseModel):
-    prescreen: str
-    shortlist: str
-    feasibility: str
-    deep_dive: str
+    prescreen: str | None = None
+    shortlist: str | None = None
+    feasibility: str | None = None
+    deep_dive: str | None = None
+    conversation_record: str | None = None
 
 
 class WorkspaceManifest(BaseModel):
     schema_version: str
-    workspace_type: Literal["citation-paper", "idea-evaluation"]
+    workspace_type: Literal["citation-paper", "idea-evaluation", "idea-creation-v2"]
     report_language: Literal["zh", "en"]
     inputs: WorkspaceInputs
     configs: WorkspaceConfigs

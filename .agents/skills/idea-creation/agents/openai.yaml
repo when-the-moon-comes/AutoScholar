@@ -1,0 +1,7 @@
+interface:
+  display_name: "Idea Creation"
+  short_description: "Generate dual-track research ideas from a seed paper and verify novelty with Semantic Scholar."
+  default_prompt: "Use $idea-creation to generate dual-track research idea cards from this seed paper and verify novelty with Semantic Scholar."
+
+policy:
+  allow_implicit_invocation: true
