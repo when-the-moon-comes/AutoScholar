@@ -1,6 +1,6 @@
 # AutoScholar 项目 Skills 工作流说明
 
-这份文档整理了仓库内 6 个本地 skill 的大致工作流程，覆盖它们各自的职责、输入输出、执行顺序，以及彼此之间怎么衔接。
+这份文档整理了仓库内 7 个本地 skill 的大致工作流程，覆盖它们各自的职责、输入输出、执行顺序，以及彼此之间怎么衔接。
 
 整理依据主要来自：
 
@@ -16,10 +16,11 @@ AutoScholar 不是“一个 prompt 干到底”的仓库，它更像一个按阶
 
 1. `autoscholar` 负责总入口和路由。
 2. `citation-workflow` 负责 claim-first 的检索、预筛、纠偏、短名单和 BibTeX。
-3. `idea-evaluation` 在已有证据的基础上评估一个研究方向值不值得做。
-4. `report-authoring` 把前面沉淀下来的结构化证据渲染成最终面向人的报告，并做校验。
-5. `semantic-scholar-api` 提供底层 Semantic Scholar 查询和调试能力。
-6. `journal-fit-advisor` 不再讨论“这个 idea 值不值得做”，而是面向“实验已经做完，论文该怎么讲、投什么刊”。
+3. `handout` 负责围绕一个领域生成术语、地貌或张力三层讲义。
+4. `idea-evaluation` 在已有证据的基础上评估一个研究方向值不值得做。
+5. `report-authoring` 把前面沉淀下来的结构化证据渲染成最终面向人的报告，并做校验。
+6. `semantic-scholar-api` 提供底层 Semantic Scholar 查询和调试能力。
+7. `journal-fit-advisor` 不再讨论“这个 idea 值不值得做”，而是面向“实验已经做完，论文该怎么讲、投什么刊”。
 
 可以把整体链路理解成下面这样：
 
@@ -27,6 +28,8 @@ AutoScholar 不是“一个 prompt 干到底”的仓库，它更像一个按阶
 autoscholar
   ├─ citation-workflow
   │    └─ 产出 selected_citations / references.bib / prescreen / shortlist
+  ├─ handout
+  │    └─ 复用 checkpointed Semantic Scholar crawl，产出分层讲义证据包和 handout.md
   ├─ idea-evaluation
   │    └─ 复用 citation-workflow 的证据，产出 idea_assessment / evidence_map
   │         └─ report-authoring
@@ -98,6 +101,7 @@ autoscholar workspace doctor --workspace D:\workspaces\demo
 3. 用 `workspace doctor` 检查 manifest、配置和已有 artifact 是否可用。
 4. 把任务路由到具体子 skill：
    - 文献证据收集 -> `citation-workflow`
+   - 领域讲义 / 三层 briefing -> `handout`
    - idea 可行性判断 -> `idea-evaluation`
    - 最终报告产出 -> `report-authoring`
    - 底层 Semantic Scholar 查询/排障 -> `semantic-scholar-api`
@@ -123,24 +127,61 @@ autoscholar workspace doctor --workspace D:\workspaces\demo
 autoscholar workspace init <dir> --template citation-paper --reports-lang zh
 autoscholar workspace init <dir> --template idea-evaluation --reports-lang zh
 autoscholar workspace doctor --workspace <dir>
+autoscholar handout init "open set recognition" --level landscape
 autoscholar semantic paper CorpusID:123
 autoscholar util pdf-to-text D:\papers\sample.pdf
 ```
 
-## 4. `citation-workflow`：claim-first 引文工作流
+## 4. `handout`：分层领域讲义
 
 ### 4.1 它的定位
 
+`handout` 用于快速进入一个研究领域，但不是生成一份泛泛综述。它把讲义拆成三层：
+
+- `terminology`：术语骨架，解决“能不能读懂 abstract”。
+- `landscape`：地貌图，解决“能不能跟上 talk、定位新论文谱系”。
+- `tension`：张力地图，解决“能不能判断 community 会如何分裂地评价一篇新投稿”。
+
+### 4.2 它的大致工作流程
+
+运行：
+
+```powershell
+autoscholar handout init "<domain>" --level terminology
+autoscholar handout init "<domain>" --level landscape
+autoscholar handout init "<domain>" --level tension --max-queries 2
+```
+
+它会生成一个轻量 handout 工作区：
+
+- `handout.yaml`
+- `queries.jsonl`
+- `artifacts/semantic_results.jsonl`
+- `artifacts/semantic_failures.jsonl`
+- `reports/handout.md`
+
+底层检索复用 `autoscholar semantic crawl` 的断点续跑机制：成功 query 会被跳过，失败或未完成 query 会在下一次运行时继续尝试。
+
+### 4.3 它和其他 skill 的关系
+
+- 它可以独立用于领域学习，不要求标准 `workspace.yaml`。
+- 它复用 `semantic-scholar-api` 的底层检索能力。
+- 它也可以作为 `idea-creation-v2` 或 idea 孵化前的认知准备。
+
+## 5. `citation-workflow`：claim-first 引文工作流
+
+### 5.1 它的定位
+
 这是 AutoScholar 最核心的证据收集链路。它不是先“广撒网找文献”，而是先把要支持的 claim 结构化，再围绕 claim 组织 query、检索、筛选和推荐纠偏。
 
-### 4.2 它解决什么问题
+### 5.2 它解决什么问题
 
 - 某个论断需要论文支持
 - 想把零散检索变成可重复执行的结构化检索流程
 - 需要从检索结果里得到 shortlist 和 BibTeX
 - 想把“检索质量差”的情况显式识别出来并补救
 
-### 4.3 前置条件
+### 5.3 前置条件
 
 通常需要一个 `citation-paper` 或 `idea-evaluation` workspace，并至少准备好：
 
@@ -150,7 +191,7 @@ autoscholar util pdf-to-text D:\papers\sample.pdf
 - `configs/recommendation.yaml`
 - `configs/citation_rules.yaml`
 
-### 4.4 它的标准工作流程
+### 5.4 它的标准工作流程
 
 #### 第 1 步：准备 claim 和 query
 
@@ -244,7 +285,7 @@ autoscholar report render --workspace <dir> --kind prescreen
 autoscholar report render --workspace <dir> --kind shortlist
 ```
 
-### 4.5 这个 skill 的核心产物
+### 5.5 这个 skill 的核心产物
 
 - `search_results.raw.jsonl`
 - `search_results.deduped.jsonl`
@@ -255,19 +296,19 @@ autoscholar report render --workspace <dir> --kind shortlist
 - `reports/prescreen.md`
 - `reports/shortlist.md`
 
-### 4.6 它和其他 skill 的关系
+### 5.6 它和其他 skill 的关系
 
 - 它通常是 `idea-evaluation` 的上游证据来源。
 - 它也能单独使用，只做 citation 支持，不继续做 idea 评估。
 - 底层检索异常时，常要借助 `semantic-scholar-api` 做排障。
 
-## 5. `idea-evaluation`：研究方向/想法评估
+## 6. `idea-evaluation`：研究方向/想法评估
 
-### 5.1 它的定位
+### 6.1 它的定位
 
 `idea-evaluation` 的任务不是找一篇论文引用，而是对一个研究 idea 做结构化判断：是否值得推进，证据强弱如何，主要风险在哪，下一步应该怎么收窄。
 
-### 5.2 什么时候应该用它
+### 6.2 什么时候应该用它
 
 适合下面这些问题：
 
@@ -276,7 +317,7 @@ autoscholar report render --workspace <dir> --kind shortlist
 - 现有证据能否支持“继续推进 / 需要修订 / 不建议继续”
 - 我需要一份 feasibility / deep-dive 报告草稿
 
-### 5.3 前置条件
+### 6.3 前置条件
 
 一般需要先创建 `idea-evaluation` 类型的 workspace：
 
@@ -295,7 +336,7 @@ autoscholar workspace init <dir> --template idea-evaluation --reports-lang zh
 
 - `artifacts/selected_citations.jsonl`
 
-### 5.4 它的标准工作流程
+### 6.4 它的标准工作流程
 
 #### 第 1 步：初始化 idea-evaluation workspace
 
@@ -370,7 +411,7 @@ autoscholar report validate --workspace <dir> --kind deep-dive
 
 - `artifacts/report_validation.json`
 
-### 5.5 这个 skill 的核心产物
+### 6.5 这个 skill 的核心产物
 
 - `artifacts/idea_assessment.json`
 - `artifacts/evidence_map.json`
@@ -389,21 +430,21 @@ autoscholar report validate --workspace <dir> --kind deep-dive
 - `evidence`
 - `next_actions`
 
-### 5.6 它和其他 skill 的关系
+### 6.6 它和其他 skill 的关系
 
 - 它强依赖 `citation-workflow` 提供证据。
 - 当用户更关心最终报告质量而不是中间流程时，通常会衔接到 `report-authoring`。
 - 若 citation 检索层出了问题，底层排障通常仍需 `semantic-scholar-api`。
 
-## 6. `report-authoring`：最终报告产出与校验
+## 7. `report-authoring`：最终报告产出与校验
 
-### 6.1 它的定位
+### 7.1 它的定位
 
 这个 skill 的重点不在“把流程跑通”，而在“把已经有的结构化证据，整理成能交付给人看的最终报告，并确认报告可审计、可追溯”。
 
 它更像是后处理与交付层。
 
-### 6.2 什么时候应该用它
+### 7.2 什么时候应该用它
 
 适合下面这些情况：
 
@@ -411,7 +452,7 @@ autoscholar report validate --workspace <dir> --kind deep-dive
 - 用户要的是一份更像最终交付物的 feasibility / deep-dive 报告
 - 用户关心叙事质量、章节完整性、证据追踪性
 
-### 6.3 前置条件
+### 7.3 前置条件
 
 这个 skill 明确要求 evidence pipeline 已经在位，至少要有：
 
@@ -422,7 +463,7 @@ autoscholar report validate --workspace <dir> --kind deep-dive
 
 如果这几个文件还不完整，先别急着润色 prose，先回去补 citation 或 reassess。
 
-### 6.4 它的标准工作流程
+### 7.4 它的标准工作流程
 
 #### 第 1 步：确认 citation 证据完整
 
@@ -456,7 +497,7 @@ autoscholar report validate --workspace <dir> --kind feasibility
 autoscholar report validate --workspace <dir> --kind deep-dive
 ```
 
-### 6.5 它对报告的要求
+### 7.5 它对报告的要求
 
 `report-authoring` 的 reference 文件对两类报告给了比较明确的验收面。
 
@@ -485,14 +526,14 @@ autoscholar report validate --workspace <dir> --kind deep-dive
 
 其中“缺少必须标题”是 hard failure。
 
-### 6.6 它和其他 skill 的关系
+### 7.6 它和其他 skill 的关系
 
 - 它不是独立起步的 skill，而是 `idea-evaluation` 的交付层延伸。
 - 如果报告看起来空泛，不应只补 prose，而应回到 claim 和 evidence 本身收紧。
 
-## 7. `semantic-scholar-api`：底层 Semantic Scholar 能力
+## 8. `semantic-scholar-api`：底层 Semantic Scholar 能力
 
-### 7.1 它的定位
+### 8.1 它的定位
 
 这个 skill 不走完整 AutoScholar 工作流，它直接暴露 Semantic Scholar Graph API 能力，用于：
 
@@ -505,14 +546,14 @@ autoscholar report validate --workspace <dir> --kind deep-dive
 
 它更像底层工具箱和排障接口。
 
-### 7.2 什么时候应该用它
+### 8.2 什么时候应该用它
 
 - 你怀疑 citation workflow 的检索结果不合理，想看原始返回
 - 你想先手动验证某个 paper ID / author ID
 - 你要排查推荐逻辑
 - 你要直接抓取某篇 paper 的 metadata 或 open-access PDF
 
-### 7.3 它的大致工作流程
+### 8.3 它的大致工作流程
 
 #### 模式 A：先人工直查，再决定是否进入 workspace 流程
 
@@ -527,7 +568,7 @@ autoscholar report validate --workspace <dir> --kind deep-dive
 3. 用 `recommend/citations/references` 进一步看相邻图谱。
 4. 必要时再修改 `configs/search.yaml`、`configs/recommendation.yaml` 或 claim/query 设计。
 
-### 7.4 支持的能力面
+### 8.4 支持的能力面
 
 根据 skill 和源码，当前支持：
 
@@ -546,7 +587,7 @@ autoscholar report validate --workspace <dir> --kind deep-dive
 
 - `src/autoscholar/integrations/semantic_scholar.py`
 
-### 7.5 常用命令
+### 8.5 常用命令
 
 ```powershell
 autoscholar semantic paper <paper_id>
@@ -561,22 +602,22 @@ autoscholar semantic download-pdf <paper_id>
 autoscholar semantic smoke
 ```
 
-### 7.6 使用注意点
+### 8.6 使用注意点
 
 - 有 `S2_API_KEY` 时会读取该环境变量。
 - 没有 key 也能跑，但速率限制会更低。
 - 尽量显式指定 `fields`，避免返回体过大。
 - `semantic smoke` 在没配 `S2_API_KEY` 时会跳过，不会硬失败。
 
-### 7.7 它和其他 skill 的关系
+### 8.7 它和其他 skill 的关系
 
 - 它通常不直接产生最终报告。
 - 它是 `citation-workflow` 的底层支撑和排障工具。
 - 在 journal fit 场景下，它也可用于补 journal profile 或检索期刊相关信号。
 
-## 8. `journal-fit-advisor`：期刊适配与论文叙事定位
+## 9. `journal-fit-advisor`：期刊适配与论文叙事定位
 
-### 8.1 它的定位
+### 9.1 它的定位
 
 这是仓库里和其他几个 skill 明显不同的一条线。
 
@@ -591,7 +632,7 @@ autoscholar semantic smoke
 - 哪个叙事更适合哪个期刊
 - 为了提高命中率，最低成本应该补哪些 patch
 
-### 8.2 它的硬约束
+### 9.2 它的硬约束
 
 这个 skill 的约束非常明确：
 
@@ -605,7 +646,7 @@ autoscholar semantic smoke
   - appendix 注释
   - 很轻量的 ablation 片段
 
-### 8.3 它适合什么阶段
+### 9.3 它适合什么阶段
 
 适合在下面这个时间点用：
 
@@ -613,7 +654,7 @@ autoscholar semantic smoke
 - 主实验已经做完
 - 当前真正的问题是论文 framing、narrative、journal fit、submission positioning
 
-### 8.4 它的工作目录模型
+### 9.4 它的工作目录模型
 
 它不使用前面那套 `workspace.yaml` 模型，而是在：
 
@@ -633,7 +674,7 @@ autoscholar semantic smoke
 - `patches.json`
 - `report.md`
 
-### 8.5 它的标准工作流程
+### 9.5 它的标准工作流程
 
 源码里这个流程已经拆成 phase0 到 phase7。
 
@@ -787,7 +828,7 @@ autoscholar jfa run --paper-id <paper_id> --draft-pdf path\to\draft.pdf --input 
 - action items
 - 汇总报告 `.autoscholar/<paper_id>/report.md`
 
-### 8.6 它的输入模板大致要求什么
+### 9.6 它的输入模板大致要求什么
 
 `input_template.md` 要求的核心信息包括：
 
@@ -798,16 +839,16 @@ autoscholar jfa run --paper-id <paper_id> --draft-pdf path\to\draft.pdf --input 
 - 目标期刊
 - 现有摘要、引言、图注、拒稿反馈（可选）
 
-### 8.7 它和其他 skill 的关系
+### 9.7 它和其他 skill 的关系
 
 - 它和 `idea-evaluation` 是两条不同阶段的能力线。
 - `idea-evaluation` 更偏“做不做这个方向”。
 - `journal-fit-advisor` 更偏“方向和实验都定了，怎么讲、投哪”。
 - 它会借用 Semantic Scholar 一类信号，但不依赖标准 workspace。
 
-## 9. 这 6 个 skill 最常见的衔接方式
+## 10. 这 7 个 skill 最常见的衔接方式
 
-### 9.1 路线 A：文献支持
+### 10.1 路线 A：文献支持
 
 适用场景：你只想把 claim 支撑和参考文献整理出来。
 
@@ -824,7 +865,24 @@ autoscholar jfa run --paper-id <paper_id> --draft-pdf path\to\draft.pdf --input 
 - `prescreen.md`
 - `shortlist.md`
 
-### 9.2 路线 B：idea 可行性分析
+### 10.2 路线 B：分层领域讲义
+
+适用场景：你进入一个新领域，需要术语骨架、地貌图或张力地图。
+
+流程：
+
+1. `autoscholar`
+2. `handout`
+3. 按层级选择 `terminology|landscape|tension`
+
+最终重点产物：
+
+- `queries.jsonl`
+- `artifacts/semantic_results.jsonl`
+- `artifacts/semantic_failures.jsonl`
+- `reports/handout.md`
+
+### 10.3 路线 C：idea 可行性分析
 
 适用场景：你要判断某个研究方向是否值得继续推进。
 
@@ -843,7 +901,7 @@ autoscholar jfa run --paper-id <paper_id> --draft-pdf path\to\draft.pdf --input 
 - `deep_dive.md`
 - `report_validation.json`
 
-### 9.3 路线 C：底层排障 / 数据侦察
+### 10.4 路线 D：底层排障 / 数据侦察
 
 适用场景：完整工作流还没准备好，或者检索结果不对，需要先做底层核查。
 
@@ -853,7 +911,7 @@ autoscholar jfa run --paper-id <paper_id> --draft-pdf path\to\draft.pdf --input 
 2. `semantic-scholar-api`
 3. 再回到 `citation-workflow` 或 `journal-fit-advisor`
 
-### 9.4 路线 D：论文包装与期刊定位
+### 10.5 路线 E：论文包装与期刊定位
 
 适用场景：方法和实验已经做完，接下来是写作策略和投稿定位。
 
@@ -868,28 +926,30 @@ autoscholar jfa run --paper-id <paper_id> --draft-pdf path\to\draft.pdf --input 
 autoscholar jfa run --paper-id <paper_id> --input input.md
 ```
 
-## 10. 一句话总结每个 skill
+## 11. 一句话总结每个 skill
 
 - `autoscholar`：总入口，负责选路、建 workspace、查健康度。
 - `citation-workflow`：围绕 claim 组织检索、预筛、纠偏、shortlist 和 BibTeX。
+- `handout`：围绕领域和认知层级生成术语、地貌或张力讲义证据包。
 - `idea-evaluation`：基于 citation 证据评估研究方向的可行性和风险。
 - `report-authoring`：把 assessment 和 evidence 渲染成最终报告并做可追踪校验。
 - `semantic-scholar-api`：底层检索、推荐、引用图谱和排障接口。
 - `journal-fit-advisor`：面向已完成方法和实验的论文 framing、期刊适配和低成本 patch 规划。
 
-## 11. 推荐阅读顺序
+## 12. 推荐阅读顺序
 
 如果你是第一次接手这个项目，建议按这个顺序读：
 
 1. `.agents/skills/autoscholar/SKILL.md`
 2. `.agents/skills/citation-workflow/SKILL.md`
 3. `.agents/skills/citation-workflow/references/workflow.md`
-4. `.agents/skills/idea-evaluation/SKILL.md`
-5. `.agents/skills/idea-evaluation/references/workflow.md`
-6. `.agents/skills/report-authoring/SKILL.md`
-7. `.agents/skills/report-authoring/references/workflow.md`
-8. `.agents/skills/semantic-scholar-api/SKILL.md`
-9. `.agents/skills/journal-fit-advisor/SKILL.md`
-10. `src/autoscholar/cli.py`
+4. `.agents/skills/handout/SKILL.md`
+5. `.agents/skills/idea-evaluation/SKILL.md`
+6. `.agents/skills/idea-evaluation/references/workflow.md`
+7. `.agents/skills/report-authoring/SKILL.md`
+8. `.agents/skills/report-authoring/references/workflow.md`
+9. `.agents/skills/semantic-scholar-api/SKILL.md`
+10. `.agents/skills/journal-fit-advisor/SKILL.md`
+11. `src/autoscholar/cli.py`
 
 这样读的好处是：先建立顶层路由，再进入主线工作流，最后看底层命令面和 JFA 这条独立能力线。

@@ -9,6 +9,7 @@ import typer
 from autoscholar.analysis import assess_idea
 from autoscholar.citation import build_shortlist, run_correction, run_prescreen, run_search, write_bibtex
 from autoscholar.citation.config import CitationRulesConfig, IdeaEvaluationConfig, RecommendationConfig, SearchConfig
+from autoscholar.handout import HandoutLevel, init_handout, validate_level
 from autoscholar.io import read_json, read_json_list, read_json_model, read_jsonl, read_yaml
 from autoscholar.journal_fit import JournalFitRunner, JournalFitWorkspace, derive_paper_id
 from autoscholar.models import (
@@ -45,6 +46,7 @@ schema_app = typer.Typer(help="JSON schema export commands.")
 semantic_app = typer.Typer(help="Low-level Semantic Scholar API commands.")
 util_app = typer.Typer(help="Utility commands.")
 jfa_app = typer.Typer(help="Journal-fit-advisor workflow commands.")
+handout_app = typer.Typer(help="Layered research handout generation.")
 
 app.add_typer(workspace_app, name="workspace")
 app.add_typer(citation_app, name="citation")
@@ -54,6 +56,7 @@ app.add_typer(schema_app, name="schema")
 app.add_typer(semantic_app, name="semantic")
 app.add_typer(util_app, name="util")
 app.add_typer(jfa_app, name="jfa")
+app.add_typer(handout_app, name="handout")
 
 
 def _load_workspace(path: Path) -> Workspace:
@@ -267,6 +270,96 @@ def _load_jfa_runner(base_dir: Path, paper_id: str) -> JournalFitRunner:
     return JournalFitRunner(JournalFitWorkspace(base_dir=base_dir, paper_id=paper_id))
 
 
+@handout_app.command("init")
+def handout_init(
+    domain: str,
+    level: str = typer.Option(
+        ...,
+        "--level",
+        help="terminology, landscape, or tension",
+    ),
+    output_dir: Path | None = typer.Option(
+        None,
+        "--output-dir",
+        help="Handout workspace directory. Defaults to handouts/<domain>-<level>.",
+    ),
+    crawl: bool = typer.Option(
+        True,
+        "--crawl/--no-crawl",
+        help="Run checkpointed Semantic Scholar crawl before rendering.",
+    ),
+    endpoint: str = typer.Option("relevance", "--endpoint", help="relevance or bulk"),
+    limit: int | None = typer.Option(None, "--limit", help="Search results per query."),
+    timeout: float = typer.Option(30.0, "--timeout"),
+    max_retries: int = typer.Option(3, "--max-retries"),
+    retry_delay: float = typer.Option(120.0, "--retry-delay"),
+    pause_seconds: float = typer.Option(10.0, "--pause-seconds"),
+    retry_failed: bool = typer.Option(
+        True,
+        "--retry-failed/--skip-failed",
+        help="Retry failed queries from the failure checkpoint.",
+    ),
+    max_queries: int | None = typer.Option(
+        None,
+        "--max-queries",
+        help="Process at most this many pending queries per checkpoint round.",
+    ),
+    until_complete: bool = typer.Option(
+        True,
+        "--until-complete/--single-pass",
+        help="Keep running checkpoint rounds until all queries complete.",
+    ),
+    round_delay: float = typer.Option(
+        300.0,
+        "--round-delay",
+        help="Seconds to wait between checkpoint rounds when --until-complete is enabled.",
+    ),
+    max_rounds: int | None = typer.Option(
+        None,
+        "--max-rounds",
+        help="Optional cap on checkpoint rounds for this command.",
+    ),
+    year: str | None = typer.Option(None, "--year", help="Bulk endpoint year filter."),
+    sort: str | None = typer.Option(None, "--sort", help="Bulk endpoint sort option."),
+    venue: str | None = typer.Option(None, "--venue", help="Bulk endpoint venue filter."),
+) -> None:
+    try:
+        resolved_level: HandoutLevel = validate_level(level)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    summary = init_handout(
+        domain=domain,
+        level=resolved_level,
+        output_dir=output_dir,
+        run_crawl=crawl,
+        endpoint=endpoint,
+        limit=limit,
+        timeout=timeout,
+        max_retries=max_retries,
+        retry_delay=retry_delay,
+        pause_seconds=pause_seconds,
+        retry_failed=retry_failed,
+        max_queries=max_queries,
+        until_complete=until_complete,
+        round_delay=round_delay,
+        max_rounds=max_rounds,
+        year=year,
+        sort=sort,
+        venue=venue,
+    )
+    typer.echo(f"Handout workspace: {summary.root}")
+    typer.echo(f"Queries: {summary.queries_path}")
+    typer.echo(f"Semantic results: {summary.results_path}")
+    typer.echo(f"Semantic failures: {summary.failures_path}")
+    typer.echo(f"Report: {summary.report_path}")
+    if summary.crawl_summary.get("complete"):
+        typer.echo("All queries complete.")
+    else:
+        typer.echo(f"Remaining queries: {summary.crawl_summary.get('remaining')}")
+    _dump_json(summary.crawl_summary)
+
+
 @jfa_app.command("init")
 def jfa_init(
     base_dir: Path = typer.Option(Path("."), "--base-dir"),
@@ -465,7 +558,22 @@ def semantic_crawl(
     max_queries: int | None = typer.Option(
         None,
         "--max-queries",
-        help="Process at most this many pending queries in this run.",
+        help="Process at most this many pending queries per checkpoint round.",
+    ),
+    until_complete: bool = typer.Option(
+        False,
+        "--until-complete/--single-pass",
+        help="Keep running checkpoint rounds until all queries complete.",
+    ),
+    round_delay: float = typer.Option(
+        300.0,
+        "--round-delay",
+        help="Seconds to wait between checkpoint rounds when --until-complete is enabled.",
+    ),
+    max_rounds: int | None = typer.Option(
+        None,
+        "--max-rounds",
+        help="Optional cap on checkpoint rounds for this command.",
     ),
     year: str | None = typer.Option(None, "--year", help="Bulk endpoint year filter."),
     sort: str | None = typer.Option(None, "--sort", help="Bulk endpoint sort option."),
@@ -491,6 +599,9 @@ def semantic_crawl(
         pause_seconds=pause_seconds,
         retry_failed=retry_failed,
         max_queries=max_queries,
+        until_complete=until_complete,
+        round_delay=round_delay,
+        max_rounds=max_rounds,
         year=year,
         sort=sort,
         venue=venue,

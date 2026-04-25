@@ -11,6 +11,7 @@ Use this skill as the entry point for the repository.
 
 - workspace initialization and validation
 - citation workflow routing
+- layered handout generation
 - idea-evaluation workflow routing
 - report rendering from structured artifacts
 - choosing the right AutoScholar sub-skill
@@ -18,6 +19,7 @@ Use this skill as the entry point for the repository.
 ## Routing
 
 - For claim-first literature support and bibliography work, use `citation-workflow`.
+- For domain handouts or three-layer research briefings, use `handout`.
 - For evaluating a research direction or idea from evidence, use `idea-evaluation`.
 - For evidence-grounded long-form feasibility or deep-dive reports, use `report-authoring`.
 - For low-level Semantic Scholar lookups or debugging, use `semantic-scholar-api`.

@@ -1,0 +1,5 @@
+{"query_id": "landscape_01_survey-map", "query_text": "open world recognition computer vision survey methods taxonomy benchmark", "purpose": "survey-map", "rationale": "寻找能搭建方法家族的综述入口。"}
+{"query_id": "landscape_02_state-of-the-art", "query_text": "open world recognition computer vision state of the art benchmark metrics", "purpose": "state-of-the-art", "rationale": "寻找评价环境与 SOTA 设定。"}
+{"query_id": "landscape_03_recent-advances", "query_text": "open world recognition computer vision recent advances 2020 2021 2022 2023 2024", "purpose": "recent-advances", "rationale": "捕捉近 5-8 年的变化节点。"}
+{"query_id": "landscape_04_representative-work", "query_text": "open world recognition computer vision representative methods comparison", "purpose": "representative-work", "rationale": "寻找代表工作和方法比较。"}
+{"query_id": "landscape_05_labs-authors", "query_text": "open world recognition computer vision leading researchers labs", "purpose": "labs-authors", "rationale": "寻找代表人物、实验室和研究谱系线索。"}

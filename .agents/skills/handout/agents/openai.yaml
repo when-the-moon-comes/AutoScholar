@@ -1,0 +1,4 @@
+interface:
+  display_name: "Handout"
+  short_description: "Build layered research handouts from Semantic Scholar evidence."
+  default_prompt: "Use this skill to create a terminology, landscape, or tension handout for a research domain using AutoScholar Semantic Scholar retrieval."

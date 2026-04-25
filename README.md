@@ -58,6 +58,15 @@ autoscholar workspace doctor --workspace D:\workspaces\my-idea
 autoscholar report render --workspace D:\workspaces\my-idea --kind idea-conversation
 ```
 
+Generate a layered research handout:
+
+```powershell
+autoscholar handout init "open set recognition" --level landscape
+autoscholar handout init "open set recognition" --level tension --max-queries 1 --round-delay 300
+```
+
+`handout init` writes checkpoints after each query and, by default, keeps running rounds until every query completes. Use `--single-pass` or `--max-rounds <n>` when you want to cap a single invocation.
+
 ## Workspace Model
 
 Every workspace is explicit and self-contained. `autoscholar workspace init` creates:
@@ -72,10 +81,11 @@ The manifest is the single source of truth for logical paths. AutoScholar no lon
 
 ## Skills
 
-AutoScholar ships with six installed skills:
+AutoScholar ships with seven installed skills:
 
 - `.agents/skills/autoscholar`
 - `.agents/skills/citation-workflow`
+- `.agents/skills/handout`
 - `.agents/skills/idea-evaluation`
 - `.agents/skills/semantic-scholar-api`
 - `.agents/skills/report-authoring`
@@ -116,6 +126,7 @@ Primary commands:
 - `autoscholar report render`
 - `autoscholar report validate`
 - `autoscholar schema export`
+- `autoscholar handout init`
 - `autoscholar jfa init`
 - `autoscholar jfa run`
 - `autoscholar semantic ...`

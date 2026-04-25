@@ -33,6 +33,9 @@ class SemanticCrawlConfig:
     pause_seconds: float = 1.0
     retry_failed: bool = True
     max_queries: int | None = None
+    until_complete: bool = False
+    round_delay: float = 300.0
+    max_rounds: int | None = None
     year: str | None = None
     sort: str | None = None
     venue: str | None = None
@@ -244,61 +247,96 @@ def crawl_semantic_queries(
     queries: list[SemanticQuery],
     config: SemanticCrawlConfig,
     client_factory: Callable[[], SemanticScholarClient] | None = None,
-) -> dict[str, int]:
+) -> dict[str, int | bool]:
     if config.endpoint not in {"relevance", "bulk"}:
         raise ValueError("endpoint must be 'relevance' or 'bulk'.")
     if config.limit < 1:
         raise ValueError("limit must be >= 1.")
     if config.max_retries < 1:
         raise ValueError("max_retries must be >= 1.")
+    if config.max_queries is not None and config.max_queries < 1:
+        raise ValueError("max_queries must be >= 1.")
+    if config.max_rounds is not None and config.max_rounds < 1:
+        raise ValueError("max_rounds must be >= 1.")
 
     client_factory = client_factory or (lambda: SemanticScholarClient(timeout=config.timeout))
     signature = config.search_signature()
     results = load_jsonl_records(config.output)
     failures = load_jsonl_records(config.failures)
 
-    completed_ids = {
-        query_id
-        for query_id, record in results.items()
-        if record.get("status") == "ok" and record.get("search_signature") == signature
-    }
-    pending = []
-    for query in queries:
-        if query.query_id in completed_ids:
-            continue
-        if not config.retry_failed and query.query_id in failures:
-            continue
-        pending.append(query)
+    def completed_query_ids() -> set[str]:
+        return {
+            query_id
+            for query_id, record in results.items()
+            if record.get("status") == "ok" and record.get("search_signature") == signature
+        }
 
-    if config.max_queries is not None:
-        pending = pending[: config.max_queries]
+    def pending_queries() -> list[SemanticQuery]:
+        completed_ids = completed_query_ids()
+        pending = []
+        for query in queries:
+            if query.query_id in completed_ids:
+                continue
+            if not config.retry_failed and query.query_id in failures:
+                continue
+            pending.append(query)
+        if config.max_queries is not None:
+            pending = pending[: config.max_queries]
+        return pending
 
     success_count = 0
     failure_count = 0
-    skipped_count = len(queries) - len(pending)
+    skipped_count = len([query for query in queries if query.query_id in completed_query_ids()])
     processed_count = 0
+    round_count = 0
+    max_rounds_reached = False
 
     ordered_ids = [query.query_id for query in queries]
-    for index, query in enumerate(pending, start=1):
-        ok, record = run_query_with_retries(query, config, client_factory)
-        processed_count += 1
-        if ok:
-            results[query.query_id] = record
-            failures.pop(query.query_id, None)
-            success_count += 1
-        else:
-            failures[query.query_id] = record
-            failure_count += 1
+    while True:
+        pending = pending_queries()
+        if not pending:
+            break
+        if config.max_rounds is not None and round_count >= config.max_rounds:
+            max_rounds_reached = True
+            break
 
-        write_jsonl_records(config.output, [results[item] for item in ordered_ids if item in results])
-        write_jsonl_records(config.failures, [failures[item] for item in ordered_ids if item in failures])
+        round_count += 1
+        for index, query in enumerate(pending, start=1):
+            ok, record = run_query_with_retries(query, config, client_factory)
+            processed_count += 1
+            if ok:
+                results[query.query_id] = record
+                failures.pop(query.query_id, None)
+                success_count += 1
+            else:
+                failures[query.query_id] = record
+                failure_count += 1
 
-        print(
-            f"[{index}/{len(pending)}] {record['status']} "
-            f"{query.query_id}: {query.query_text}"
-        )
-        if ok and config.pause_seconds > 0 and index < len(pending):
-            time.sleep(config.pause_seconds)
+            write_jsonl_records(config.output, [results[item] for item in ordered_ids if item in results])
+            write_jsonl_records(config.failures, [failures[item] for item in ordered_ids if item in failures])
+
+            print(
+                f"[round {round_count} {index}/{len(pending)}] {record['status']} "
+                f"{query.query_id}: {query.query_text}"
+            )
+            if config.pause_seconds > 0 and index < len(pending):
+                time.sleep(config.pause_seconds)
+
+        if len(completed_query_ids()) == len(queries):
+            break
+        if not config.until_complete:
+            break
+        if config.max_rounds is not None and round_count >= config.max_rounds:
+            max_rounds_reached = True
+            break
+        if config.round_delay > 0:
+            remaining = len(queries) - len(completed_query_ids())
+            print(f"Waiting {config.round_delay:.0f}s before next checkpoint round. remaining={remaining}")
+            time.sleep(config.round_delay)
+
+    final_completed_ids = completed_query_ids()
+    completed_count = len([query for query in queries if query.query_id in final_completed_ids])
+    remaining_count = len(queries) - completed_count
 
     return {
         "total": len(queries),
@@ -306,6 +344,12 @@ def crawl_semantic_queries(
         "skipped": skipped_count,
         "success": success_count,
         "failure": failure_count,
+        "completed": completed_count,
+        "remaining": remaining_count,
+        "complete": remaining_count == 0,
+        "rounds": round_count,
+        "until_complete": config.until_complete,
+        "max_rounds_reached": max_rounds_reached,
         "stored_success": len(results),
         "stored_failure": len(failures),
     }

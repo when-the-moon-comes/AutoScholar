@@ -1,0 +1,16 @@
+schema_version: '1'
+domain: open world recognition computer vision
+level: terminology
+level_title: 第 1 层：术语骨架（Terminology Scaffold）
+created_at: '2026-04-25T16:40:53.737253+00:00'
+artifacts:
+  queries: queries.jsonl
+  supplemental_queries: supplemental_queries.jsonl
+  semantic_results: artifacts/semantic_results.jsonl
+  semantic_failures: artifacts/semantic_failures.jsonl
+  semantic_results_supplemental: artifacts/semantic_results_supplemental.jsonl
+  semantic_failures_supplemental: artifacts/semantic_failures_supplemental.jsonl
+  web_evidence: artifacts/web_evidence.jsonl
+reports:
+  handout: reports/handout.md
+  final_handout: reports/final_handout.md

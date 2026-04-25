@@ -1,0 +1,5 @@
+{"query_id":"term_sup_01_open-set-risk","query_text":"open set recognition open space risk OpenMax unknown rejection","purpose":"concept-boundary","rationale":"锁定开放集识别、开放空间风险、OpenMax、unknown rejection 的术语边界。"}
+{"query_id":"term_sup_02_open-world-loop","query_text":"open world recognition unknown detection incremental learning oracle labeling","purpose":"concept-boundary","rationale":"锁定开放世界识别闭环：未知检测、人工标注、新类增量学习。"}
+{"query_id":"term_sup_03_ood-osr","query_text":"out-of-distribution detection open set recognition semantic shift benchmark terminology","purpose":"close-term-matrix","rationale":"区分 OOD detection、open set recognition、semantic shift。"}
+{"query_id":"term_sup_04_owod","query_text":"open world object detection unknown recall wilderness impact absolute open set error","purpose":"benchmark-terms","rationale":"补齐开放世界目标检测的评测术语。"}
+{"query_id":"term_sup_05_open-vocabulary","query_text":"open vocabulary object detection vision language model open set recognition unknown detection","purpose":"close-term-matrix","rationale":"区分 open-vocabulary detection、VLM 与 open-set/open-world。"}
