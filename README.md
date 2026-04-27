@@ -9,6 +9,8 @@
 ```
 .
 ├── .agents/skills/          # Claude 读取的技能定义（SKILL.md + 参考文档）
+├── .claudeignore            # 排除 workspaces/ 等输出目录，防止旧产物进入 Claude 上下文
+├── CLAUDE.md                # Claude Code 项目指令（环境、检索渠道、调用方式）
 ├── config/                  # 全局配置（搜索规则等）
 ├── docs/
 │   ├── design/              # 各功能设计思路文档
@@ -25,15 +27,32 @@
 ```
 
 > **所有运行数据都放在 `workspaces/` 下**，和代码完全分离。  
-> 你不需要手动创建子目录，每个命令的 `init` 步骤会替你建好。
+> 你不需要手动创建子目录，每个命令的 `init` 步骤会替你建好。  
+> `workspaces/` 已被 `.claudeignore` 排除，Claude Code 不会把旧工作区产物加载进上下文。
 
 ---
 
-## 安装
+## 环境与安装
+
+### 标准安装（有网络）
 
 ```bash
 python -m pip install -e .[test]
 ```
+
+### 离线环境（当前机器）
+
+`autoscholar` 包未安装到任何 conda 环境，网络离线无法拉取依赖。直接用 PYTHONPATH 合并两个已有 conda 环境来满足运行时依赖：
+
+```bash
+PYTHONPATH=/home/yingjun/.conda/envs/wind/lib/python3.9/site-packages:/path/to/auto_scholar2.0版/src \
+~/.conda/envs/yingjun/bin/python3 -c "from autoscholar.handout import init_handout; ..."
+```
+
+- `~/.conda/envs/yingjun`：有 pydantic / yaml / jinja2 / requests
+- `~/.conda/envs/wind/lib/python3.9/site-packages`：有 httpx 及其依赖
+
+详见 `CLAUDE.md`。
 
 ---
 
@@ -181,6 +200,10 @@ autoscholar handout init "open set recognition" --level tension --max-queries 1 
 
 > 每次爬取后写 checkpoint，中断后重新执行同一命令会自动跳过已完成的查询。
 
+**检索渠道**：CLI 默认使用 Semantic Scholar；若遭遇 429 限速（匿名访问无 API Key 时常见），可改用 OpenAlex（`openalex_crawl.py`），匿名访问无限速。通过 skill 调用时，Claude 会根据实际连通性自动选择渠道。
+
+**OpenAlex 查询要领**：机器学习类话题务必使用领域专属短语（如 `catastrophic forgetting neural networks`），避免泛化词（如 `incremental learning`）——后者会被 OpenAlex 匹配到教育学、政策学等无关论文。
+
 ---
 
 ### 5. 期刊匹配顾问 (Journal Fit Advisor)
@@ -283,6 +306,7 @@ autoscholar trigger relay \
 | `idea-creation-v2` | 五阶段 idea 孵化（含输入模板、阶段 playbook） |
 | `idea-evaluation` | 想法可行性评估 |
 | `journal-fit-advisor` | 期刊推荐分析流程 |
+| `openalex-api` | OpenAlex API 低级操作（查询调试、替换 S2 检索） |
 | `report-authoring` | 报告生成规范 |
 | `semantic-scholar-api` | Semantic Scholar API 使用说明 |
 | `triggered-push` | 四范式触发推送流程 |
