@@ -1,0 +1,13 @@
+# Workspace outputs — large JSONL artifacts and generated reports from past runs.
+# Excluding these prevents Claude Code from loading stale evidence pools and
+# previous handout drafts into context when starting a new skill session.
+workspaces/
+
+# Compiled Python caches
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+src/**/*.cpython-*.pyc
+
+# pytest temp output
+.pytest_tmp/

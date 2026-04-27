@@ -1,0 +1,11 @@
+schema_version: '1'
+domain: incremental learning
+level: terminology
+level_title: 第 1 层：术语骨架（Terminology Scaffold）
+created_at: '2026-04-27T12:53:06.281791+00:00'
+artifacts:
+  queries: queries.jsonl
+  semantic_results: artifacts/semantic_results.jsonl
+  semantic_failures: artifacts/semantic_failures.jsonl
+reports:
+  handout: reports/handout.md

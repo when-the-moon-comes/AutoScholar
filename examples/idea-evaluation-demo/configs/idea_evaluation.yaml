@@ -1,6 +1,0 @@
-top_evidence_per_claim: 2
-ready_threshold: 0.7
-revision_threshold: 0.45
-report_top_papers_per_claim: 3
-report_reference_limit: 12
-report_claim_summary_limit: 3

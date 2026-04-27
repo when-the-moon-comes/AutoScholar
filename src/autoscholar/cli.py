@@ -27,16 +27,23 @@ from autoscholar.models import (
     WorkspaceManifest,
     export_json_schemas,
 )
+from autoscholar.openalex_crawl import (
+    OpenAlexCrawlConfig,
+    crawl_openalex_queries,
+    load_queries_file as load_openalex_queries_file,
+    normalize_queries as normalize_openalex_queries,
+)
 from autoscholar.reporting import build_evidence_map, render_report, validate_report
 from autoscholar.semantic_crawl import (
     SemanticCrawlConfig,
     crawl_semantic_queries,
-    load_queries_file,
-    normalize_queries,
+    load_queries_file as load_semantic_queries_file,
+    normalize_queries as normalize_semantic_queries,
 )
 from autoscholar.utils import pdf_to_text
 from autoscholar.workspace import Workspace, dump_manifest, workspace_summary
-from autoscholar.integrations import SemanticScholarClient
+from autoscholar.integrations import OpenAlexClient, SemanticScholarClient
+from autoscholar.integrations.openalex import DEFAULT_AUTHOR_SELECT, DEFAULT_WORK_SELECT
 
 app = typer.Typer(help="AutoScholar v2 unified CLI.")
 workspace_app = typer.Typer(help="Workspace management.")
@@ -45,6 +52,7 @@ idea_app = typer.Typer(help="Idea analysis workflow commands.")
 report_app = typer.Typer(help="Report rendering commands.")
 schema_app = typer.Typer(help="JSON schema export commands.")
 semantic_app = typer.Typer(help="Low-level Semantic Scholar API commands.")
+openalex_app = typer.Typer(help="Low-level OpenAlex API commands.")
 util_app = typer.Typer(help="Utility commands.")
 jfa_app = typer.Typer(help="Journal-fit-advisor workflow commands.")
 handout_app = typer.Typer(help="Layered research handout generation.")
@@ -55,6 +63,7 @@ app.add_typer(idea_app, name="idea")
 app.add_typer(report_app, name="report")
 app.add_typer(schema_app, name="schema")
 app.add_typer(semantic_app, name="semantic")
+app.add_typer(openalex_app, name="openalex")
 app.add_typer(util_app, name="util")
 app.add_typer(jfa_app, name="jfa")
 app.add_typer(handout_app, name="handout")
@@ -583,9 +592,9 @@ def semantic_crawl(
 ) -> None:
     query_items = []
     if queries:
-        query_items.extend(normalize_queries(queries))
+        query_items.extend(normalize_semantic_queries(queries))
     if queries_file is not None:
-        query_items.extend(load_queries_file(queries_file))
+        query_items.extend(load_semantic_queries_file(queries_file))
     if not query_items:
         raise typer.BadParameter("Provide at least one --query or --queries-file.")
 
@@ -716,6 +725,252 @@ def semantic_smoke(
             paper_id=paper_id,
             limit=1,
             fields="paperId,title,year",
+            timeout=timeout,
+        )
+
+    _dump_json(
+        {
+            "query": query,
+            "top_paper": papers[0],
+            "recommendation_count": len(recommendations),
+            "recommendations": recommendations,
+        }
+    )
+
+
+@openalex_app.command("paper")
+def openalex_paper(
+    work_id: str,
+    fields: str = typer.Option(DEFAULT_WORK_SELECT, "--fields", help="OpenAlex select fields."),
+    timeout: float | None = typer.Option(None, "--timeout"),
+) -> None:
+    with OpenAlexClient(timeout=timeout) as client:
+        _dump_json(client.get_paper(work_id, fields=fields, timeout=timeout))
+
+
+@openalex_app.command("search")
+def openalex_search(
+    query: str,
+    limit: int = typer.Option(5, "--limit"),
+    fields: str = typer.Option(DEFAULT_WORK_SELECT, "--fields", help="OpenAlex select fields."),
+    endpoint: str = typer.Option("works", "--endpoint", help="works/search/relevance or bulk."),
+    filters: str | None = typer.Option(None, "--filter", help="OpenAlex filter expression."),
+    sort: str | None = typer.Option(None, "--sort", help="OpenAlex sort expression."),
+    timeout: float | None = typer.Option(None, "--timeout"),
+) -> None:
+    with OpenAlexClient(timeout=timeout) as client:
+        if endpoint in {"bulk", "cursor"}:
+            payload = list(
+                client.search_papers_bulk(
+                    query=query,
+                    fields=fields,
+                    max_results=limit,
+                    filters=filters,
+                    sort=sort,
+                    timeout=timeout,
+                )
+            )
+            _dump_json({"endpoint": "bulk", "query": query, "count": len(payload), "data": payload})
+            return
+        _dump_json(
+            client.search_papers(
+                query=query,
+                limit=limit,
+                fields=fields,
+                filters=filters,
+                sort=sort,
+                timeout=timeout,
+            )
+        )
+
+
+@openalex_app.command("crawl")
+def openalex_crawl(
+    queries: list[str] | None = typer.Option(
+        None,
+        "--query",
+        "-q",
+        help="Query text. May be passed multiple times.",
+    ),
+    queries_file: Path | None = typer.Option(
+        None,
+        "--queries-file",
+        help="Text, JSON, or JSONL file containing queries.",
+    ),
+    output: Path = typer.Option(Path("paper/openalex_crawl_results.jsonl"), "--output"),
+    failures: Path = typer.Option(Path("paper/openalex_crawl_failures.jsonl"), "--failures"),
+    endpoint: str = typer.Option("works", "--endpoint", help="works/search/relevance or bulk."),
+    limit: int = typer.Option(10, "--limit"),
+    fields: str = typer.Option(DEFAULT_WORK_SELECT, "--fields", help="OpenAlex select fields."),
+    filters: str | None = typer.Option(None, "--filter", help="OpenAlex filter expression."),
+    sort: str | None = typer.Option(None, "--sort", help="OpenAlex sort expression."),
+    timeout: float = typer.Option(30.0, "--timeout"),
+    max_retries: int = typer.Option(3, "--max-retries"),
+    retry_delay: float = typer.Option(30.0, "--retry-delay"),
+    pause_seconds: float = typer.Option(1.0, "--pause-seconds"),
+    retry_failed: bool = typer.Option(
+        True,
+        "--retry-failed/--skip-failed",
+        help="Retry failed queries from the failure checkpoint.",
+    ),
+    max_queries: int | None = typer.Option(
+        None,
+        "--max-queries",
+        help="Process at most this many pending queries per checkpoint round.",
+    ),
+    until_complete: bool = typer.Option(
+        False,
+        "--until-complete/--single-pass",
+        help="Keep running checkpoint rounds until all queries complete.",
+    ),
+    round_delay: float = typer.Option(
+        300.0,
+        "--round-delay",
+        help="Seconds to wait between checkpoint rounds when --until-complete is enabled.",
+    ),
+    max_rounds: int | None = typer.Option(
+        None,
+        "--max-rounds",
+        help="Optional cap on checkpoint rounds for this command.",
+    ),
+) -> None:
+    query_items = []
+    if queries:
+        query_items.extend(normalize_openalex_queries(queries))
+    if queries_file is not None:
+        query_items.extend(load_openalex_queries_file(queries_file))
+    if not query_items:
+        raise typer.BadParameter("Provide at least one --query or --queries-file.")
+
+    config = OpenAlexCrawlConfig(
+        output=output,
+        failures=failures,
+        endpoint=endpoint,
+        limit=limit,
+        fields=fields,
+        timeout=timeout,
+        max_retries=max_retries,
+        retry_delay=retry_delay,
+        pause_seconds=pause_seconds,
+        retry_failed=retry_failed,
+        max_queries=max_queries,
+        until_complete=until_complete,
+        round_delay=round_delay,
+        max_rounds=max_rounds,
+        filters=filters,
+        sort=sort,
+    )
+    summary = crawl_openalex_queries(query_items, config)
+    _dump_json(summary)
+
+
+@openalex_app.command("recommend")
+def openalex_recommend(
+    work_id: str,
+    limit: int = typer.Option(5, "--limit"),
+    fields: str = typer.Option(DEFAULT_WORK_SELECT, "--fields", help="OpenAlex select fields."),
+    timeout: float | None = typer.Option(None, "--timeout"),
+) -> None:
+    with OpenAlexClient(timeout=timeout) as client:
+        _dump_json(client.get_recommendations(paper_id=work_id, limit=limit, fields=fields, timeout=timeout))
+
+
+@openalex_app.command("citations")
+def openalex_citations(
+    work_id: str,
+    limit: int = typer.Option(50, "--limit"),
+    fields: str = typer.Option(DEFAULT_WORK_SELECT, "--fields", help="OpenAlex select fields."),
+    timeout: float | None = typer.Option(None, "--timeout"),
+) -> None:
+    with OpenAlexClient(timeout=timeout) as client:
+        _dump_json(client.get_paper_citations(paper_id=work_id, limit=limit, fields=fields, timeout=timeout))
+
+
+@openalex_app.command("references")
+def openalex_references(
+    work_id: str,
+    limit: int = typer.Option(50, "--limit"),
+    fields: str = typer.Option(DEFAULT_WORK_SELECT, "--fields", help="OpenAlex select fields."),
+    timeout: float | None = typer.Option(None, "--timeout"),
+) -> None:
+    with OpenAlexClient(timeout=timeout) as client:
+        _dump_json(client.get_paper_references(paper_id=work_id, limit=limit, fields=fields, timeout=timeout))
+
+
+@openalex_app.command("author-search")
+def openalex_author_search(
+    query: str,
+    limit: int = typer.Option(10, "--limit"),
+    fields: str = typer.Option(DEFAULT_AUTHOR_SELECT, "--fields", help="OpenAlex select fields."),
+    timeout: float | None = typer.Option(None, "--timeout"),
+) -> None:
+    with OpenAlexClient(timeout=timeout) as client:
+        _dump_json(client.search_author(query=query, limit=limit, fields=fields, timeout=timeout))
+
+
+@openalex_app.command("author")
+def openalex_author(
+    author_id: str,
+    fields: str = typer.Option(DEFAULT_AUTHOR_SELECT, "--fields", help="OpenAlex select fields."),
+    timeout: float | None = typer.Option(None, "--timeout"),
+) -> None:
+    with OpenAlexClient(timeout=timeout) as client:
+        _dump_json(client.get_author(author_id=author_id, fields=fields, timeout=timeout))
+
+
+@openalex_app.command("author-papers")
+def openalex_author_papers(
+    author_id: str,
+    limit: int = typer.Option(20, "--limit"),
+    fields: str = typer.Option(DEFAULT_WORK_SELECT, "--fields", help="OpenAlex select fields."),
+    timeout: float | None = typer.Option(None, "--timeout"),
+) -> None:
+    with OpenAlexClient(timeout=timeout) as client:
+        _dump_json(client.get_author_papers(author_id=author_id, limit=limit, fields=fields, timeout=timeout))
+
+
+@openalex_app.command("download-pdf")
+def openalex_download_pdf(
+    work_id: str,
+    directory: Path = typer.Option(Path("papers"), "--directory"),
+    timeout: float | None = typer.Option(None, "--timeout"),
+) -> None:
+    with OpenAlexClient(timeout=timeout) as client:
+        output_path = client.download_open_access_pdf(paper_id=work_id, directory=directory, timeout=timeout)
+    if output_path is None:
+        typer.echo("No open access PDF was available.")
+        raise typer.Exit(code=1)
+    typer.echo(f"Downloaded PDF: {output_path}")
+
+
+@openalex_app.command("smoke")
+def openalex_smoke(
+    query: str = typer.Option("medical image segmentation", "--query"),
+    timeout: float = typer.Option(30.0, "--timeout"),
+) -> None:
+    if not os.environ.get("OPENALEX_API_KEY"):
+        typer.echo("OPENALEX_API_KEY is not set; live smoke test skipped.")
+        return
+
+    with OpenAlexClient(timeout=timeout) as client:
+        search_payload = client.search_papers(
+            query=query,
+            limit=1,
+            fields="id,title,display_name,publication_year,related_works",
+            timeout=timeout,
+        )
+        papers = search_payload.get("data", [])
+        if not papers:
+            typer.echo("Live smoke test failed: search returned no papers.")
+            raise typer.Exit(code=1)
+        paper_id = papers[0].get("paperId")
+        if not paper_id:
+            typer.echo("Live smoke test failed: top search result had no paperId.")
+            raise typer.Exit(code=1)
+        recommendations = client.get_recommendations(
+            paper_id=paper_id,
+            limit=1,
+            fields="id,title,display_name,publication_year",
             timeout=timeout,
         )
 

@@ -23,6 +23,7 @@ Use this skill as the entry point for the repository.
 - For evaluating a research direction or idea from evidence, use `idea-evaluation`.
 - For evidence-grounded long-form feasibility or deep-dive reports, use `report-authoring`.
 - For low-level Semantic Scholar lookups or debugging, use `semantic-scholar-api`.
+- For low-level OpenAlex lookups, crawling, or Semantic Scholar replacement checks, use `openalex-api`.
 
 ## Operating Model
 
@@ -37,6 +38,7 @@ Use this skill as the entry point for the repository.
 autoscholar workspace init D:\workspaces\demo --template citation-paper --reports-lang zh
 autoscholar workspace doctor --workspace D:\workspaces\demo
 autoscholar semantic paper CorpusID:123
+autoscholar openalex paper W2884436604
 autoscholar util pdf-to-text D:\papers\sample.pdf
 ```
 
