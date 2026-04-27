@@ -182,7 +182,7 @@ def domain_slug(domain: str) -> str:
 
 
 def default_handout_dir(domain: str, level: HandoutLevel) -> Path:
-    return Path("handouts") / f"{domain_slug(domain)}-{level}"
+    return Path("workspaces/handout") / f"{domain_slug(domain)}-{level}"
 
 
 def build_handout_queries(domain: str, level: HandoutLevel) -> list[HandoutQuery]:

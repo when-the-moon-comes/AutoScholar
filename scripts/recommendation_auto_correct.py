@@ -12,8 +12,10 @@ from typing import Any, Dict, List, Optional, Tuple
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+_SCRIPTS_DIR = Path(__file__).resolve().parent
+for _p in (str(REPO_ROOT), str(_SCRIPTS_DIR)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from SemanticScholarApi import SemanticScholarClient
 

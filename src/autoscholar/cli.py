@@ -10,6 +10,7 @@ from autoscholar.analysis import assess_idea
 from autoscholar.citation import build_shortlist, run_correction, run_prescreen, run_search, write_bibtex
 from autoscholar.citation.config import CitationRulesConfig, IdeaEvaluationConfig, RecommendationConfig, SearchConfig
 from autoscholar.handout import HandoutLevel, init_handout, validate_level
+from autoscholar.triggered_push.cli import trigger_app
 from autoscholar.io import read_json, read_json_list, read_json_model, read_jsonl, read_yaml
 from autoscholar.journal_fit import JournalFitRunner, JournalFitWorkspace, derive_paper_id
 from autoscholar.models import (
@@ -57,6 +58,7 @@ app.add_typer(semantic_app, name="semantic")
 app.add_typer(util_app, name="util")
 app.add_typer(jfa_app, name="jfa")
 app.add_typer(handout_app, name="handout")
+app.add_typer(trigger_app, name="trigger")
 
 
 def _load_workspace(path: Path) -> Workspace:
@@ -281,7 +283,7 @@ def handout_init(
     output_dir: Path | None = typer.Option(
         None,
         "--output-dir",
-        help="Handout workspace directory. Defaults to handouts/<domain>-<level>.",
+        help="Handout workspace directory. Defaults to workspaces/handout/<domain>-<level>.",
     ),
     crawl: bool = typer.Option(
         True,

@@ -8,7 +8,7 @@ import httpx
 import requests
 
 
-SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
+SRC_ROOT = Path(__file__).resolve().parents[2] / "src"
 if SRC_ROOT.exists() and str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
