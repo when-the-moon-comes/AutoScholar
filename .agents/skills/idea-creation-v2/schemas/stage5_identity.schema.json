@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Stage 5 Identity Convergence Artifact",
+  "type": "object",
+  "required": [
+    "stage",
+    "candidate_names",
+    "selected_name",
+    "sacrifice_statement",
+    "final_identity_block"
+  ],
+  "properties": {
+    "stage": {"const": 5},
+    "candidate_names": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "description": "5 个候选名字，覆盖 5 个维度",
+      "items": {
+        "type": "object",
+        "required": ["name", "dimension", "natural_venue", "default_review_lens", "excluded_readership"],
+        "properties": {
+          "name": {"type": "string"},
+          "dimension": {
+            "type": "string",
+            "enum": ["phenomenon", "method", "framework", "scenario", "gap"]
+          },
+          "natural_venue": {"type": "string"},
+          "default_review_lens": {"type": "string"},
+          "excluded_readership": {"type": "string"}
+        }
+      }
+    },
+    "selected_name": {"type": "string"},
+    "sacrifice_statement": {
+      "type": "string",
+      "description": "选这个名字意味着放弃了哪个社区/强调点"
+    },
+    "final_identity_block": {
+      "type": "object",
+      "required": ["title", "one_sentence_pitch", "community", "primary_contribution_type"],
+      "properties": {
+        "title": {"type": "string"},
+        "one_sentence_pitch": {"type": "string"},
+        "community": {"type": "string"},
+        "primary_contribution_type": {
+          "type": "string",
+          "enum": ["phenomenon", "method", "framework", "scenario", "gap"]
+        }
+      }
+    }
+  }
+}

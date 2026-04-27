@@ -1,0 +1,20 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.pytest_tmp/
+.mypy_cache/
+*.pyo
+*.pyd
+*.egg-info/
+
+.venv/
+build/
+dist/
+
+.workspaces/
+
+# Legacy local workspaces kept outside v2 structure.
+paper/
+old_paper/
+idea_eval/
+scripts/run_workspace_claim_review.py

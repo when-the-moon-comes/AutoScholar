@@ -1,0 +1,29 @@
+# Semantic Scholar Prescreen
+
+## Summary
+
+- Query reviews: {{ summary.query_count }}
+- Claims with at least one `keep` query: {{ summary.ready_claims }}
+- Claims currently needing query rewrite: {{ summary.rewrite_claims }}
+
+{% for claim_id, claim in claims|dictsort %}
+## {{ claim_id }}
+
+- Section: {{ claim.section }}
+- Source lines: {{ claim.source_lines }}
+- Claim type: {{ claim.claim_type }}
+- Priority: {{ claim.priority }}
+- Claim: {{ claim.claim_text }}
+
+{% set items = reviews_by_claim.get(claim_id, []) %}
+{% if items %}
+| query_id | status | paper_count | max_citations | reason |
+| --- | --- | --- | --- | --- |
+{% for item in items|sort(attribute="query_id") %}
+| {{ item.query_id }} | {{ item.status }} | {{ item.paper_count }} | {{ item.max_citations }} | {{ item.reason }} |
+{% endfor %}
+{% else %}
+No query review records yet.
+{% endif %}
+
+{% endfor %}

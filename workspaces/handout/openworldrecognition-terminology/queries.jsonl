@@ -1,0 +1,4 @@
+{"query_id": "terminology_01_terminology-survey", "query_text": "open world recognition computer vision survey terminology concepts definitions", "purpose": "terminology-survey", "rationale": "寻找综述性论文中的术语定义。"}
+{"query_id": "terminology_02_tutorial-taxonomy", "query_text": "open world recognition computer vision tutorial taxonomy glossary", "purpose": "tutorial-taxonomy", "rationale": "寻找教程、taxonomy、glossary 式材料。"}
+{"query_id": "terminology_03_concept-boundary", "query_text": "open world recognition computer vision concept distinction comparison", "purpose": "concept-boundary", "rationale": "寻找术语边界和相近概念区分。"}
+{"query_id": "terminology_04_benchmark-terms", "query_text": "open world recognition computer vision benchmark metric terminology", "purpose": "benchmark-terms", "rationale": "补齐评价相关术语。"}

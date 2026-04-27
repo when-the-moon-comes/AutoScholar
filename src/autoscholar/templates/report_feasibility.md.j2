@@ -1,0 +1,116 @@
+{% if language == "zh" %}
+# 可行性评估报告
+
+## 1. 评估结论
+
+- 方向: {{ assessment.title }}
+- 当前建议: `{{ assessment.recommendation }}`
+- 生成时间: {{ assessment.generated_at }}
+
+{{ recommendation_summary }}
+
+## 2. 为什么值得继续做
+
+{% for paragraph in support_story %}
+{{ paragraph }}
+
+{% endfor %}
+## 3. 当前不足与风险
+
+{% for item in gaps %}
+- {{ item }}
+{% endfor %}
+
+## 4. 建议的收敛方向
+
+{% for item in framing_suggestions %}
+- {{ item }}
+{% endfor %}
+
+## 5. 关键证据摘要
+
+{% for claim in evidence_map.claims %}
+### {{ claim.claim_id }}{% if claim.short_label %} · {{ claim.short_label }}{% endif %}
+
+- 状态: {{ claim.status }}
+- 证据强度: {{ claim.evidence_strength }}
+- Claim: {{ claim.claim_text }}
+
+{{ claim.narrative }}
+
+{% for note in claim.notes %}
+- 备注: {{ note }}
+{% endfor %}
+
+{% if claim.top_papers %}
+{% for paper in claim.top_papers %}
+- 《{{ paper.title }}》{% if paper.year %} ({{ paper.year }}){% endif %}{% if paper.venue %}, {{ paper.venue }}{% endif %}{% if paper.citation_count is not none %}, citations={{ paper.citation_count }}{% endif %}
+  支撑类型: {{ paper.support_tier }}。{{ paper.support_reason }}
+{% endfor %}
+{% else %}
+- 当前没有可用的 top papers。
+{% endif %}
+
+{% endfor %}
+## 6. 下一步建议
+
+{% for item in action_plan %}
+- {{ item }}
+{% endfor %}
+
+{% else %}
+# Feasibility Report
+
+## 1. Recommendation
+
+- Direction: {{ assessment.title }}
+- Current recommendation: `{{ assessment.recommendation }}`
+- Generated at: {{ assessment.generated_at }}
+
+{{ recommendation_summary }}
+
+## 2. Why It Is Still Worth Pursuing
+
+{% for paragraph in support_story %}
+{{ paragraph }}
+
+{% endfor %}
+## 3. Gaps And Risks
+
+{% for item in gaps %}
+- {{ item }}
+{% endfor %}
+
+## 4. Recommended Narrowing
+
+{% for item in framing_suggestions %}
+- {{ item }}
+{% endfor %}
+
+## 5. Key Evidence Digest
+
+{% for claim in evidence_map.claims %}
+### {{ claim.claim_id }}{% if claim.short_label %} · {{ claim.short_label }}{% endif %}
+
+- Status: {{ claim.status }}
+- Evidence strength: {{ claim.evidence_strength }}
+- Claim: {{ claim.claim_text }}
+
+{{ claim.narrative }}
+
+{% for note in claim.notes %}
+- Note: {{ note }}
+{% endfor %}
+
+{% for paper in claim.top_papers %}
+- {{ paper.title }}{% if paper.year %} ({{ paper.year }}){% endif %}{% if paper.venue %}, {{ paper.venue }}{% endif %}{% if paper.citation_count is not none %}, citations={{ paper.citation_count }}{% endif %}
+  support_tier={{ paper.support_tier }}. {{ paper.support_reason }}
+{% endfor %}
+
+{% endfor %}
+## 6. Next Actions
+
+{% for item in action_plan %}
+- {{ item }}
+{% endfor %}
+{% endif %}

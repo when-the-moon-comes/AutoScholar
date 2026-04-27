@@ -1,0 +1,46 @@
+# idea-creation-v2 对话配置
+# 每个 workspace 可覆盖；默认值适配常规研究者节奏
+
+retrieval_budgets:
+  stage1: 5                    # framing 唯一性检查，semantic paper 调用次数上限
+  stage2_per_alt: 5            # 每个 alternative 的密度查询次数上限
+  stage3_per_survivor: 50      # 每个 survivor 的 shortlist 论文上限
+  stage4_per_narrative: 5      # 每个失败叙事的证据追溯次数上限
+  stage5: 0                    # Stage 5 不做检索
+
+stage_gates:
+  stage1_max_rounds: 3         # 超过此轮数仍未触发终止信号，应暂停对话
+  stage2_min_alternatives: 3
+  stage2_max_alternatives: 5
+  stage3_max_survivors: 3
+  stage4_require_all_three_types: true   # evaluation/impact/timing 必须都有
+  stage5_allow_user_write_in: true       # 允许研究者拒绝所有候选名、自己写一个
+
+form_types_allowed:
+  - alpha      # 概念切分
+  - beta       # 场景倒逼
+  - gamma      # 空白观察
+  - delta      # 约束驱动
+
+# 失败模式监控
+failure_mode_detection:
+  warn_if_claude_judges: true              # Claude 不应做判断
+  warn_if_user_enumerates: true            # 研究者不应做穷举
+  warn_if_retrieval_per_round_exceeds: 3   # 每轮检索 > 3 次视为泛滥
+
+# 每轮自检
+per_round_self_check:
+  asymmetric_role_check: true
+  progress_check: true
+  consecutive_no_progress_rounds_threshold: 2
+
+# 回跳条件
+backtrack_rules:
+  stage3_all_methods_violate_constraint: "bounce_to_stage2"
+  stage5_cannot_name_due_to_method_vagueness: "bounce_to_stage3"
+
+# 报告渲染
+report:
+  kind: idea-conversation
+  language: zh
+  include_retrieval_appendix: true

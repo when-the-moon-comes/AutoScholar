@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Stage 1 Diagnosis Artifact",
+  "type": "object",
+  "required": ["stage", "form_type", "diagnoses", "user_acknowledgments", "decision"],
+  "properties": {
+    "stage": {"const": 1},
+    "form_type": {
+      "type": "string",
+      "enum": ["alpha", "beta", "gamma", "delta"],
+      "description": "alpha=概念切分; beta=场景倒逼; gamma=空白观察; delta=约束驱动"
+    },
+    "diagnoses": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["dimension", "weakness", "severity"],
+        "properties": {
+          "dimension": {
+            "type": "string",
+            "enum": [
+              "trigger_specificity",
+              "negative_space_truthfulness",
+              "smallest_testable_unit_executability",
+              "form_specific_alpha_split_reality",
+              "form_specific_beta_constraint_binary",
+              "form_specific_gamma_search_exhaustiveness",
+              "form_specific_delta_elimination_completeness"
+            ]
+          },
+          "weakness": {"type": "string"},
+          "severity": {"type": "string", "enum": ["high", "medium", "low"]}
+        }
+      }
+    },
+    "user_acknowledgments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["dimension", "user_stance"],
+        "properties": {
+          "dimension": {"type": "string"},
+          "user_stance": {"type": "string", "enum": ["fix", "accept_as_known_risk"]},
+          "fix_plan": {"type": "string"}
+        }
+      }
+    },
+    "decision": {"type": "string", "enum": ["proceed", "pause_for_maturation"]},
+    "framing_uniqueness_check": {
+      "type": "object",
+      "properties": {
+        "queries_run": {"type": "array", "items": {"type": "string"}},
+        "existing_named_framings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "paper_id": {"type": "string"},
+              "note": {"type": "string"}
+            }
+          }
+        }
+      }
+    }
+  }
+}

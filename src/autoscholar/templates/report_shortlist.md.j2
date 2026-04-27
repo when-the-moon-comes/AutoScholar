@@ -1,0 +1,39 @@
+# Claim Recommended Citations
+
+## Summary
+
+- Claims: {{ summary.claim_count }}
+- `ready`: {{ summary.ready_count }}
+- `review`: {{ summary.review_count }}
+- `weak`: {{ summary.weak_count }}
+
+{% for record in records %}
+## {{ record.claim.claim_id }}
+
+- Status: {{ record.status }}
+- Section: {{ record.claim.section }}
+- Priority: {{ record.claim.priority }}
+- Candidate pool: {{ record.candidate_count }}
+- Claim: {{ record.claim.claim_text }}
+{% if record.note %}
+- Note: {{ record.note }}
+{% endif %}
+
+{% if record.query_reviews %}
+- Query review:
+{% for review in record.query_reviews %}
+  - {{ review.query_id }} [{{ review.status }}, papers={{ review.paper_count }}]: {{ review.reason }}
+{% endfor %}
+{% endif %}
+
+{% if record.selected_papers %}
+- Selected papers:
+{% for paper in record.selected_papers %}
+  - {{ paper.rank }}. {{ paper.paper.title }} ({{ paper.paper.year or "n/a" }}; cites={{ paper.paper.citation_count or 0 }}; doi={{ paper.paper.doi or "n/a" }})
+    score={{ "%.2f"|format(paper.score_breakdown.final_score) }}, topical={{ "%.2f"|format(paper.score_breakdown.topical_fit) }}, support={{ "%.2f"|format(paper.score_breakdown.support_signal) }}
+{% endfor %}
+{% else %}
+- Selected papers: none
+{% endif %}
+
+{% endfor %}

@@ -1,0 +1,94 @@
+# Relative paths are resolved from this file's directory.
+
+# Claim units extracted from the manuscript.
+claim_units: ../paper/citation_claim_units.md
+
+# Deduplicated Semantic Scholar search results.
+deduped_results: ../paper/semantic_scholar_raw_results_deduped.jsonl
+
+# Recommendation rules used by the existing claim recommendation step.
+# Prefer a paper-specific rules file when one exists.
+recommendation_rules: ../paper/claim_recommendation_rules.yaml
+
+# Standalone outputs for the correction pass.
+output_jsonl: ../paper/semantic_scholar_recommendation_corrections.jsonl
+output_report: ../paper/semantic_scholar_recommendation_correction_report.md
+
+# Optional list of claim IDs to process.
+claim_ids: []
+
+# When true, evaluate triggers and seed selection without calling the API.
+dry_run: false
+
+trigger:
+  # Trigger if the current claim recommendation stage surfaces fewer papers than this.
+  min_selected_papers: 2
+
+  # Trigger if no current candidate is supported by at least this many non-excluded queries.
+  min_cross_query_support: 2
+
+  # Trigger if the claim has only a small number of candidates and all of them are low-signal.
+  low_citation_threshold: 10
+  max_low_signal_candidates: 2
+
+  # Keep review and note based triggers enabled by default.
+  include_review_status: true
+  include_claim_notes: true
+
+seed:
+  # Seed selection mode:
+  # - auto: current ranking logic only
+  # - hybrid: claim_overrides.positive first, then auto-fill remaining slots
+  # - manual: only use claim_overrides.positive
+  selection_mode: auto
+
+  # Maximum number of seed papers to send to Recommendations API per claim.
+  max_seeds_per_claim: 2
+
+  # Require at least this much claim/query textual overlap before a paper can be a seed.
+  min_total_overlap: 2
+
+  # Optional claim-level seed controls.
+  # Seed refs are resolved against the current claim's query candidate pool.
+  # Accepted formats:
+  # - "paperId:<Semantic Scholar paper id>"
+  # - {paperId: "<Semantic Scholar paper id>"}
+  # - {doi: "10.xxxx/xxxx"}
+  # - {title: "Paper Title", year: 2021}
+  #
+  # positive: papers to actively use as positive seeds
+  # negative: papers to push away from when method=positive_seed_list
+  # blocked: papers that must never be used as seeds
+  #
+  # claim_overrides:
+  #   C07:
+  #     positive:
+  #       - {doi: "10.1080/13549839.2021.1902948"}
+  #     negative:
+  #       - {paperId: "5dc0f0d4d9d7f0b5ce0d1b7b52d8e9d8f5a12345"}
+  #     blocked:
+  #       - {title: "Off-topic example paper", year: 2020}
+  claim_overrides: {}
+
+recommendations:
+  # Recommendation API call mode.
+  # `positive_seed_list` uses one call with all selected seed papers.
+  # `single_seed` preserves the older one-seed-per-call behavior.
+  method: positive_seed_list
+
+  # Number of recommendations to request per seed paper.
+  # In `positive_seed_list` mode, the effective request limit is this value multiplied by seed count.
+  per_seed_limit: 5
+
+  # Number of merged candidates to keep in the correction outputs.
+  top_candidates_per_claim: 5
+
+  # Promote a corrected claim to `corrected_ready` only when enough top candidates look strong.
+  ready_candidate_count: 2
+  ready_min_total_overlap: 3
+
+  # Small pause to avoid bursty unauthenticated traffic.
+  pause_seconds: 0.2
+
+  # Metadata fields requested from Recommendations API.
+  fields: paperId,title,year,authors,url,abstract,citationCount,influentialCitationCount,venue,externalIds,isOpenAccess,openAccessPdf

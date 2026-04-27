@@ -1,0 +1,32 @@
+# idea-creation-v2 workspace manifest
+# 由 `autoscholar workspace init --template idea-creation-v2` 生成
+
+name: "{{ workspace_name }}"
+template: idea-creation-v2
+created_at: "{{ timestamp }}"
+reports_lang: "{{ reports_lang | default('zh') }}"
+
+inputs:
+  idea_seed: inputs/idea_seed.md
+  constraints: inputs/constraints.yaml
+
+configs:
+  conversation: configs/conversation.yaml
+
+artifacts:
+  stage1: artifacts/stage1_diagnosis.json
+  stage2: artifacts/stage2_alternatives.json
+  stage3: artifacts/stage3_pruning.json
+  stage4: artifacts/stage4_failure_narratives.json
+  stage5: artifacts/stage5_identity.json
+  retrieval_dir: artifacts/retrieval/
+
+reports:
+  conversation_record: reports/idea_conversation_record.md
+
+# 对话状态（由 Claude 维护）
+state:
+  current_stage: 0               # 0=未开始, 1-5=各阶段, 6=已完成
+  form_type: null                # alpha | beta | gamma | delta
+  rounds_in_current_stage: 0
+  last_retrieval_count: 0

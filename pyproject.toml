@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autoscholar"
+version = "2.0.0"
+description = "Structured scholarly workflows for citations, idea evaluation, and agent-facing skills."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "httpx>=0.27.0",
+  "jinja2>=3.1.4",
+  "pydantic>=2.7.0",
+  "pymupdf>=1.24.0",
+  "pyyaml>=6.0.1",
+  "requests>=2.31.0",
+  "typer>=0.12.3",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.2.0",
+]
+
+[project.scripts]
+autoscholar = "autoscholar.cli:app"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+autoscholar = [
+  "templates/*.j2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--basetemp=.pytest_tmp"
+markers = [
+  "live: runs real network smoke checks against Semantic Scholar when S2_API_KEY is set",
+]

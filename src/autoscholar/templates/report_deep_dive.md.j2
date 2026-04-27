@@ -1,0 +1,162 @@
+{% if language == "zh" %}
+# 深度分析报告
+
+## 1. 一页结论
+
+- 方向: {{ assessment.title }}
+- 当前建议: `{{ assessment.recommendation }}`
+- Overall score: {{ assessment.scores.overall }}
+
+{% for paragraph in one_page_conclusion %}
+{{ paragraph }}
+
+{% endfor %}
+## 2. 证据全景
+
+{% for claim in evidence_map.claims %}
+### {{ claim.claim_id }}{% if claim.short_label %} · {{ claim.short_label }}{% endif %}
+
+- 状态: {{ claim.status }}
+- 证据强度: {{ claim.evidence_strength }}
+- Claim: {{ claim.claim_text }}
+
+{{ claim.narrative }}
+
+{% for note in claim.notes %}
+- 备注: {{ note }}
+{% endfor %}
+
+{% if claim.top_papers %}
+{% for paper in claim.top_papers %}
+- 《{{ paper.title }}》{% if paper.year %} ({{ paper.year }}){% endif %}{% if paper.venue %}, {{ paper.venue }}{% endif %}{% if paper.citation_count is not none %}, citations={{ paper.citation_count }}{% endif %}
+  支撑类型: {{ paper.support_tier }}。{{ paper.support_reason }}
+{% endfor %}
+{% else %}
+- 当前没有可用 top papers。
+{% endif %}
+
+{% endfor %}
+## 3. 推荐的问题定义与边界
+
+{% for item in framing_definition %}
+- {{ item }}
+{% endfor %}
+
+## 4. 方法层建议
+
+{% for item in method_guidance %}
+- {{ item }}
+{% endfor %}
+
+## 5. 实验与验证建议
+
+{% for item in experiment_plan %}
+- {{ item }}
+{% endfor %}
+
+## 6. 论文中可以主张什么 / 不应主张什么
+
+### 可以主张
+
+{% for item in can_claim %}
+- {{ item }}
+{% endfor %}
+
+### 不应主张
+
+{% for item in avoid_claims %}
+- {{ item }}
+{% endfor %}
+
+## 7. 主要风险与应对
+
+{% for item in risk_responses %}
+- 风险: {{ item.risk }}
+  应对: {{ item.response }}
+{% endfor %}
+
+## 8. 参考证据清单
+
+{% for paper in evidence_map.reference_papers %}
+- 《{{ paper.title }}》{% if paper.year %} ({{ paper.year }}){% endif %}{% if paper.venue %}, {{ paper.venue }}{% endif %}{% if paper.doi %}, DOI={{ paper.doi }}{% endif %}
+{% endfor %}
+
+{% else %}
+# Deep Dive Report
+
+## 1. One-Page Conclusion
+
+- Direction: {{ assessment.title }}
+- Current recommendation: `{{ assessment.recommendation }}`
+- Overall score: {{ assessment.scores.overall }}
+
+{% for paragraph in one_page_conclusion %}
+{{ paragraph }}
+
+{% endfor %}
+## 2. Evidence Landscape
+
+{% for claim in evidence_map.claims %}
+### {{ claim.claim_id }}{% if claim.short_label %} · {{ claim.short_label }}{% endif %}
+
+- Status: {{ claim.status }}
+- Evidence strength: {{ claim.evidence_strength }}
+- Claim: {{ claim.claim_text }}
+
+{{ claim.narrative }}
+
+{% for note in claim.notes %}
+- Note: {{ note }}
+{% endfor %}
+
+{% for paper in claim.top_papers %}
+- {{ paper.title }}{% if paper.year %} ({{ paper.year }}){% endif %}{% if paper.venue %}, {{ paper.venue }}{% endif %}{% if paper.citation_count is not none %}, citations={{ paper.citation_count }}{% endif %}
+  support_tier={{ paper.support_tier }}. {{ paper.support_reason }}
+{% endfor %}
+
+{% endfor %}
+## 3. Recommended Framing And Boundaries
+
+{% for item in framing_definition %}
+- {{ item }}
+{% endfor %}
+
+## 4. Method Guidance
+
+{% for item in method_guidance %}
+- {{ item }}
+{% endfor %}
+
+## 5. Experimental Guidance
+
+{% for item in experiment_plan %}
+- {{ item }}
+{% endfor %}
+
+## 6. What The Paper Can Claim / Should Avoid
+
+### Can Claim
+
+{% for item in can_claim %}
+- {{ item }}
+{% endfor %}
+
+### Should Avoid
+
+{% for item in avoid_claims %}
+- {{ item }}
+{% endfor %}
+
+## 7. Main Risks And Responses
+
+{% for item in risk_responses %}
+- Risk: {{ item.risk }}
+  Response: {{ item.response }}
+{% endfor %}
+
+## 8. Evidence Reference List
+
+{% for paper in evidence_map.reference_papers %}
+- {{ paper.title }}{% if paper.year %} ({{ paper.year }}){% endif %}{% if paper.venue %}, {{ paper.venue }}{% endif %}{% if paper.doi %}, DOI={{ paper.doi }}{% endif %}
+{% endfor %}
+{% endif %}

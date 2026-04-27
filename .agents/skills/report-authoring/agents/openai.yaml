@@ -1,0 +1,4 @@
+interface:
+  display_name: "Report Authoring"
+  short_description: "Draft and validate evidence-grounded reports."
+  default_prompt: "Use this skill to draft and validate feasibility or deep-dive reports from AutoScholar evidence artifacts."
